@@ -16,6 +16,12 @@ public class Pathfinding : MonoBehaviour
 
     GridCell[,] _grid;
 
+    // Benchmark
+    BenchmarkManager _benchmark = new BenchmarkManager();
+    BenchmarkResult _result = new BenchmarkResult();
+
+    int _visitedNodes;
+
     public int Width { get => _width; }
     public int Height { get => _height; }
 
@@ -24,8 +30,17 @@ public class Pathfinding : MonoBehaviour
     {
         InitGrid();
 
-        // 테스트용
+        _visitedNodes = 0;
+
+        _benchmark.Start();
+
         ExploreNeighbors(5, 5);
+
+        _result.SearchTime = _benchmark.Stop();
+        _result.VisitedNodes = _visitedNodes;
+
+        Debug.Log($"SearchTime: {_result.SearchTime} ms");
+        Debug.Log($"VisitedNodes: {_result.VisitedNodes}");
     }
 
     // Grid 생성 및 초기화
@@ -36,7 +51,10 @@ public class Pathfinding : MonoBehaviour
         for (int x = 0; x < _width; x++)
         {
             for (int y = 0; y < _height; y++)
+            {
+                _grid[x, y] = new GridCell();  
                 _grid[x, y].Walkable = true;
+            }
         }
     }
 
@@ -59,6 +77,8 @@ public class Pathfinding : MonoBehaviour
 
             if (!neighbor.Walkable)
                 continue;
+
+            _visitedNodes++;
 
             Debug.Log($"Neighbor: {nextX}, {nextY}");
         }
