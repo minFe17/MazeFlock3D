@@ -6,6 +6,7 @@ using UnityEngine;
 public class GridSystem
 {
     GridCell[] _cells;
+    PathNode[] _nodes;
 
     int _width;
     int _height;
@@ -19,10 +20,21 @@ public class GridSystem
         _height = height;
 
         _cells = new GridCell[width * height];
+        _nodes = new PathNode[width * height];
 
+        // GridCell 초기화
         for (int i = 0; i < _cells.Length; i++)
-        {
             _cells[i].Walkable = true;
+
+        // PathNode 초기화
+        for (int i = 0; i < _nodes.Length; i++)
+        {
+            _nodes[i] = new PathNode
+            {
+                CostFromStart = int.MaxValue,
+                CostToGoal = 0,
+                ParentIndex = -1
+            };
         }
     }
 
@@ -55,5 +67,17 @@ public class GridSystem
     {
         int index = GetIndex(x, y);
         _cells[index] = cell;
+    }
+
+    public PathNode GetNode(int x, int y)
+    {
+        int index = GetIndex(x, y);
+        return _nodes[index];
+    }
+
+    public void SetNode(int x, int y, PathNode node)
+    {
+        int index = GetIndex(x, y);
+        _nodes[index] = node;
     }
 }
