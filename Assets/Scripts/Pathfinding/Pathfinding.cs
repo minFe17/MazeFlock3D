@@ -14,7 +14,8 @@ public class Pathfinding : MonoBehaviour
     int _width = 10;
     int _height = 10;
 
-    GridCell[,] _grid;
+    GridSystem _grid;
+    Pathfinder _pathfinder;
 
     // Benchmark
     BenchmarkManager _benchmark = new BenchmarkManager();
@@ -30,37 +31,33 @@ public class Pathfinding : MonoBehaviour
     {
         InitGrid();
 
-        _visitedNodes = 0;
+        int startIndex = _grid.GetIndex(5, 5);
 
-        _benchmark.Start();
+        _pathfinder.BeginSearch(startIndex);
 
-        ExploreNeighbors(5, 5);
+        // 테스트용 더미 노드 추가
+        _pathfinder.Debug_AddNode(_grid.GetIndex(0, 0), 30);
+        _pathfinder.Debug_AddNode(_grid.GetIndex(1, 0), 10);
+        _pathfinder.Debug_AddNode(_grid.GetIndex(2, 0), 50);
+        _pathfinder.Debug_AddNode(_grid.GetIndex(3, 0), 20);
 
-        _result.SearchTime = _benchmark.Stop();
-        _result.VisitedNodes = _visitedNodes;
+        while (true)
+        {
+            int node = _pathfinder.GetLowestFCostNode();
+            Debug.Log($"선택: {node}");
 
-        Debug.Log($"SearchTime: {_result.SearchTime} ms");
-        Debug.Log($"VisitedNodes: {_result.VisitedNodes}");
+            if (_pathfinder.IsEmpty())
+                break;
+        }
     }
 
     // Grid 생성 및 초기화
     void InitGrid()
     {
-        _grid = new GridCell[_width, _height];
+        _grid = new GridSystem();
+        _grid.CreateGrid(_width, _height);
 
-        for (int x = 0; x < _width; x++)
-        {
-            for (int y = 0; y < _height; y++)
-            {
-                _grid[x, y] = new GridCell();  
-                _grid[x, y].Walkable = true;
-            }
-        }
-    }
-
-    bool InBounds(int x, int y)
-    {
-        return x >= 0 && y >= 0 && x < _width && y < _height;
+        _pathfinder = new Pathfinder(_grid);
     }
 
     void ExploreNeighbors(int x, int y)
@@ -70,10 +67,10 @@ public class Pathfinding : MonoBehaviour
             int nextX = x + dir.x;
             int nextY = y + dir.y;
 
-            if (!InBounds(nextX, nextY))
+            if (!_grid.IsInBounds(nextX, nextY))
                 continue;
 
-            GridCell neighbor = _grid[nextX, nextY];
+            GridCell neighbor = _grid.GetCell(nextX, nextY);
 
             if (!neighbor.Walkable)
                 continue;
@@ -93,10 +90,11 @@ public class Pathfinding : MonoBehaviour
         {
             for (int y = 0; y < _height; y++)
             {
+                GridCell cell = _grid.GetCell(x, y);
+
                 Vector3 pos = new Vector3(x, 0, y);
 
-                Gizmos.color = _grid[x, y].Walkable ? Color.white : Color.red;
-
+                Gizmos.color = cell.Walkable ? Color.white : Color.red;
                 Gizmos.DrawWireCube(pos, Vector3.one);
 
 #if UNITY_EDITOR

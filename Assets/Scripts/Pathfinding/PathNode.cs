@@ -8,4 +8,11 @@ public struct PathNode
     public int ParentIndex;
 
     public int TotalCost => CostFromStart + CostToGoal;
+
+    public void Init()
+    {
+        CostFromStart = int.MaxValue;
+        CostToGoal = 0;
+        ParentIndex = -1;
+    }
 }

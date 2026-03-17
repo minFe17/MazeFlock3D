@@ -27,34 +27,35 @@ public class GridSystem
             _cells[i].Walkable = true;
 
         // PathNode √ ±‚»≠
+        ResetNodes();
+    }
+
+    public void ResetNodes()
+    {
         for (int i = 0; i < _nodes.Length; i++)
         {
-            _nodes[i] = new PathNode
-            {
-                CostFromStart = int.MaxValue,
-                CostToGoal = 0,
-                ParentIndex = -1
-            };
+            PathNode node = _nodes[i];
+            node.Init();
+            _nodes[i] = node;
         }
     }
 
     public int GetIndex(int x, int y)
     {
-        return y * Width + x;
+        return y * _width + x;
     }
 
     public Vector2Int GetPosition(int index)
     {
-        int x = index % Width;
-        int y = index / Width;
+        int x = index % _width;
+        int y = index / _width;
 
         return new Vector2Int(x, y);
     }
 
     public bool IsInBounds(int x, int y)
     {
-        return x >= 0 && x < Width &&
-               y >= 0 && y < Height;
+        return x >= 0 && x < _width && y >= 0 && y < _height;
     }
 
     public GridCell GetCell(int x, int y)
@@ -75,9 +76,19 @@ public class GridSystem
         return _nodes[index];
     }
 
+    public PathNode GetNode(int index)
+    {
+        return _nodes[index];
+    }
+
     public void SetNode(int x, int y, PathNode node)
     {
         int index = GetIndex(x, y);
+        _nodes[index] = node;
+    }
+
+    public void SetNode(int index, PathNode node)
+    {
         _nodes[index] = node;
     }
 }
