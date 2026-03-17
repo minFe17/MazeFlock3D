@@ -6,15 +6,20 @@ public class Pathfinder
     GridSystem _grid;
 
     List<int> _openList = new List<int>();
+    bool[] _closedSet;
 
     public Pathfinder(GridSystem grid)
     {
         _grid = grid;
+        _closedSet = new bool[_grid.Width * _grid.Height];
     }
 
     public void BeginSearch(int startIndex)
     {
         _openList.Clear();
+
+        for (int i = 0; i < _closedSet.Length; i++)
+            _closedSet[i] = false;
 
         PathNode startNode = _grid.GetNode(startIndex);
         startNode.CostFromStart = 0;
@@ -27,6 +32,9 @@ public class Pathfinder
 
     public int GetLowestFCostNode()
     {
+        if (_openList.Count == 0)
+            return -1;
+
         int bestIndex = 0;
         int bestNodeIndex = _openList[0];
 
@@ -46,7 +54,7 @@ public class Pathfinder
 
         int result = _openList[bestIndex];
         _openList.RemoveAt(bestIndex);
-
+        _closedSet[result] = true;
         return result;
     }
 
@@ -64,5 +72,10 @@ public class Pathfinder
     public bool IsEmpty()
     {
         return _openList.Count == 0;
+    }
+
+    public bool IsClosed(int index)
+    {
+        return _closedSet[index];
     }
 }
