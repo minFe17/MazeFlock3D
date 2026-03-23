@@ -2,6 +2,7 @@
 using UnityEditor;
 #endif
 using UnityEngine;
+using System.Collections.Generic;
 
 /// <summary>
 /// Grid 기반 Pathfinding에서 현재 셀 주변의 이웃 노드를 탐색하는 클래스
@@ -17,6 +18,8 @@ public class Pathfinding : MonoBehaviour
     GridSystem _grid;
     Pathfinder _pathfinder;
 
+    List<int> _path;
+
     // Benchmark
     BenchmarkManager _benchmark = new BenchmarkManager();
     BenchmarkResult _result = new BenchmarkResult();
@@ -31,23 +34,28 @@ public class Pathfinding : MonoBehaviour
     {
         InitGrid();
 
-        int startIndex = _grid.GetIndex(5, 5);
+        int start = _grid.GetIndex(0, 0);
+        int end = _grid.GetIndex(9, 9);
 
-        _pathfinder.BeginSearch(startIndex);
-
-        // 테스트용 더미 노드 추가
-        _pathfinder.Debug_AddNode(_grid.GetIndex(0, 0), 30);
-        _pathfinder.Debug_AddNode(_grid.GetIndex(1, 0), 10);
-        _pathfinder.Debug_AddNode(_grid.GetIndex(2, 0), 50);
-        _pathfinder.Debug_AddNode(_grid.GetIndex(3, 0), 20);
+        _pathfinder.BeginSearch(start, end);
 
         while (true)
         {
-            int node = _pathfinder.GetLowestFCostNode();
-            Debug.Log($"선택: {node}");
+            bool reached = _pathfinder.Step(out int current);
+
+            if (reached)
+            {
+                Debug.Log("목표 도달!");
+
+                _path = _pathfinder.BuildPath(end);
+                break;
+            }
 
             if (_pathfinder.IsEmpty())
+            {
+                Debug.Log("경로 없음");
                 break;
+            }
         }
     }
 
@@ -101,6 +109,30 @@ public class Pathfinding : MonoBehaviour
                 Handles.Label(pos, $"{x},{y}");
 #endif
             }
+        }
+
+        // Path 표시
+        if (_path == null)
+            return;
+
+        Gizmos.color = Color.green;
+
+        for (int i = 0; i < _path.Count - 1; i++)
+        {
+            Vector2Int a = _grid.GetPosition(_path[i]);
+            Vector2Int b = _grid.GetPosition(_path[i + 1]);
+
+            Vector3 posA = new Vector3(a.x, 0, a.y);
+            Vector3 posB = new Vector3(b.x, 0, b.y);
+
+            Gizmos.DrawLine(posA, posB);
+        }
+
+        // 노드 점 표시
+        foreach (int index in _path)
+        {
+            Vector2Int pos = _grid.GetPosition(index);
+            Gizmos.DrawSphere(new Vector3(pos.x, 0, pos.y), 0.2f);
         }
     }
 }
