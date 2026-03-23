@@ -119,13 +119,20 @@ public class Pathfinder
             if (_closedSet[neighborIndex])
                 continue;
 
+            // 3. 장애물 체크
+            int x = neighborIndex % width;
+            int y = neighborIndex / width;
+
+            if (!_grid.GetCell(x, y).Walkable)
+                continue;
+
             PathNode neighborNode = _grid.GetNode(neighborIndex);
 
-            // 3. CostFromStart 계산
+            // 4. CostFromStart 계산
             int moveCost = 1;
             int newCost = currentNode.CostFromStart + moveCost;
 
-            // 4. 더 짧은 경로면 갱신
+            // 5. 더 짧은 경로면 갱신
             if (newCost < neighborNode.CostFromStart)
             {
                 neighborNode.CostFromStart = newCost;
@@ -134,7 +141,7 @@ public class Pathfinder
 
                 _grid.SetNode(neighborIndex, neighborNode);
 
-                // 5. OpenList 추가
+                // 6. OpenList 추가
                 if (!_openList.Contains(neighborIndex))
                     _openList.Add(neighborIndex);
             }

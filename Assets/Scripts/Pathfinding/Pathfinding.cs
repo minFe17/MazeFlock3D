@@ -29,10 +29,10 @@ public class Pathfinding : MonoBehaviour
     public int Width { get => _width; }
     public int Height { get => _height; }
 
-
     void Start()
     {
         InitGrid();
+        CreateObstacle();
 
         int start = _grid.GetIndex(0, 0);
         int end = _grid.GetIndex(9, 9);
@@ -66,6 +66,20 @@ public class Pathfinding : MonoBehaviour
         _grid.CreateGrid(_width, _height);
 
         _pathfinder = new Pathfinder(_grid);
+    }
+
+    void CreateObstacle()
+    {
+        for (int x = 0; x < _width; x++)
+        {
+            GridCell cell = _grid.GetCell(x, 5);
+            cell.Walkable = false;
+            _grid.SetCell(x, 5, cell);
+        }
+
+        GridCell gap = _grid.GetCell(4, 5);
+        gap.Walkable = true;
+        _grid.SetCell(4, 5, gap);
     }
 
     void ExploreNeighbors(int x, int y)
