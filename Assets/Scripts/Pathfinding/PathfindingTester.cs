@@ -28,42 +28,7 @@ public class PathfindingTester : MonoBehaviour
         }
 
         Debug.Log($"Start: {start}, End: {end}");
-
         _runner.Run(start, end);
-
-        // 재탐색 테스트
-
-        int goal1 = GetRandomWalkable(grid, width, height);
-        int goal2 = GetRandomWalkable(grid, width, height);
-
-        var path1 = _runner.RunAndGetPath(start, goal1);
-        var path2 = _runner.RunAndGetPath(start, goal2);
-
-        Debug.Log($"[재탐색] Goal1: {goal1}, Length: {path1?.Count}");
-        Debug.Log($"[재탐색] Goal2: {goal2}, Length: {path2?.Count}");
-
-        // 가까운 vs 먼 목표 비교
-
-        int startX = start % width;
-        int startY = start / width;
-
-        // 가까운 목표
-        int nearX = Mathf.Clamp(startX + 1, 0, width - 1);
-        int nearY = startY;
-
-        int nearGoal = grid.GetIndex(nearX, nearY);
-
-        if (!grid.GetCell(nearX, nearY).Walkable)
-            nearGoal = GetNearestWalkable(grid, nearGoal, width, height);
-
-        List<int> nearPath = _runner.RunAndGetPath(start, nearGoal);
-
-        // 먼 목표
-        int farGoal = grid.GetIndex(width - 1, height - 1);
-        List<int> farPath = _runner.RunAndGetPath(start, farGoal);
-
-        Debug.Log($"[거리비교] Near Length: {nearPath?.Count}");
-        Debug.Log($"[거리비교] Far Length: {farPath?.Count}");
     }
 
     void GetStartEnd(GridSystem grid, int width, int height, out int start, out int end)
@@ -150,5 +115,55 @@ public class PathfindingTester : MonoBehaviour
             }
         }
         return -1;
+    }
+
+    bool ValidatePath(List<int> path, GridSystem grid)
+    {
+        if (path == null || path.Count == 0)
+            return false;
+
+        int width = grid.Width;
+
+        for (int i = 0; i < path.Count - 1; i++)
+        {
+            int a = path[i];
+            int b = path[i + 1];
+
+            int x1 = a % width;
+            int y1 = a / width;
+
+            int x2 = b % width;
+            int y2 = b / width;
+
+            int dx = Mathf.Abs(x1 - x2);
+            int dy = Mathf.Abs(y1 - y2);
+
+            // 4방향 체크
+            if (dx + dy != 1)
+            {
+                Debug.LogError("잘못된 이동 (대각선 or 점프)");
+                return false;
+            }
+
+            // 장애물 체크
+            if (!grid.GetCell(x2, y2).Walkable)
+            {
+                Debug.LogError("장애물 통과");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    int GetManhattan(int start, int end, int width)
+    {
+        int sx = start % width;
+        int sy = start / width;
+
+        int ex = end % width;
+        int ey = end / width;
+
+        return Mathf.Abs(sx - ex) + Mathf.Abs(sy - ey);
     }
 }
