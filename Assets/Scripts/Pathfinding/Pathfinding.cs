@@ -9,6 +9,8 @@ using System.Collections.Generic;
 /// </summary>
 public class Pathfinding : MonoBehaviour
 {
+    [SerializeField] bool _usePrimMaze = true;
+
     int _width = 10;
     int _height = 10;
 
@@ -26,7 +28,10 @@ public class Pathfinding : MonoBehaviour
 
         _pathfinder = new Pathfinder(_grid);
 
-        MapBuilder.CreateObstacle(_grid, _width, _height);
+        if (_usePrimMaze)
+            MapBuilder.CreatePrimMaze(_grid, _width, _height);
+        else
+            MapBuilder.CreateObstacle(_grid, _width, _height);
     }
 
     public void Run(int start, int end)
@@ -113,6 +118,28 @@ public class Pathfinding : MonoBehaviour
         int toY = to / width;
 
         return new Vector2Int(toX - fromX, toY - fromY);
+    }
+
+    public List<int> RunRawPath(int start, int end)
+    {
+        if (start < 0 || end < 0)
+            return null;
+
+        if (start == end)
+            return new List<int> { start };
+
+        _pathfinder.BeginSearch(start, end);
+
+        while (true)
+        {
+            bool reached = _pathfinder.Step(out int current);
+
+            if (reached)
+                return _pathfinder.BuildPath(end);
+
+            if (_pathfinder.IsEmpty())
+                return null;
+        }
     }
 
     #region Gizmos

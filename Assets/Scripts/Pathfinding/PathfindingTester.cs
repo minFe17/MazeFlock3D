@@ -28,7 +28,21 @@ public class PathfindingTester : MonoBehaviour
         }
 
         Debug.Log($"Start: {start}, End: {end}");
+
         _runner.Run(start, end);
+
+         List<int> path = _runner.RunAndGetPath(start, end);
+
+        List<int> rawPath = _runner.RunRawPath(start, end);
+        bool isValid = ValidatePath(rawPath, grid);
+
+        Debug.Log($"경로 검증 결과: {isValid}");
+
+        if (path != null)
+        {
+            int manhattan = GetManhattan(start, end, width);
+            Debug.Log($"Path Length: {path.Count}, Manhattan: {manhattan}");
+        }
     }
 
     void GetStartEnd(GridSystem grid, int width, int height, out int start, out int end)
