@@ -145,7 +145,10 @@ public class Pathfinding : MonoBehaviour
     #region Gizmos
     void OnDrawGizmos()
     {
-        if (_grid == null) return;
+        if (_grid == null) 
+            return;
+
+        GUIStyle style = new GUIStyle();
 
         // Grid
         for (int x = 0; x < _width; x++)
@@ -160,7 +163,8 @@ public class Pathfinding : MonoBehaviour
                 Gizmos.DrawWireCube(pos, Vector3.one);
 
 #if UNITY_EDITOR
-                Handles.Label(pos, $"{x},{y}");
+                style.normal.textColor = cell.Walkable ? Color.white : Color.red;
+                Handles.Label(pos, $"{x},{y}", style);
 #endif
             }
         }
