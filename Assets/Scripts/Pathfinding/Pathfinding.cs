@@ -9,6 +9,7 @@ using System.Collections.Generic;
 /// </summary>
 public class Pathfinding : MonoBehaviour
 {
+    [SerializeField] int _mapSeed;
     [SerializeField] bool _usePrimMaze = true;
 
     int _width = 10;
@@ -23,6 +24,9 @@ public class Pathfinding : MonoBehaviour
 
     void Awake()
     {
+        Debug.Log($"Map Seed: {_mapSeed}");
+        Random.InitState(_mapSeed);
+
         _grid = new GridSystem();
         _grid.CreateGrid(_width, _height);
 

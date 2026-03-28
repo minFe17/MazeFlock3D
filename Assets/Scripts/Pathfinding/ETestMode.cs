@@ -1,7 +1,7 @@
 public enum ETestMode
 {
-    Random,
-    Corner,
-    Center,
+    CenterToEdge,     
+    CornerToCorner,   
+    CenterToCorner,   
     SameStartGoal
 }
