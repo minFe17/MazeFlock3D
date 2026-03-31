@@ -7,13 +7,19 @@ public class Pathfinder
 
     List<int> _openList = new List<int>();
     bool[] _closedSet;
+    bool[] _inOpenSet; 
 
     int _endIndex;
+
+    public int VisitedNodeCount { get; private set; }
 
     public Pathfinder(GridSystem grid)
     {
         _grid = grid;
-        _closedSet = new bool[_grid.Width * _grid.Height];
+
+        int size = _grid.Width * _grid.Height;
+        _closedSet = new bool[size];
+        _inOpenSet = new bool[size];
     }
 
     int Heuristic(int first, int second)
@@ -32,12 +38,27 @@ public class Pathfinder
     public void BeginSearch(int startIndex, int endIndex)
     {
         _endIndex = endIndex;
-        _openList.Clear();
 
-        for (int i = 0; i < _closedSet.Length; i++)
+        _openList.Clear();
+        VisitedNodeCount = 0;
+
+        int size = _closedSet.Length;
+
+        for (int i = 0; i < size; i++)
+        {
             _closedSet[i] = false;
+            _inOpenSet[i] = false; 
+        }
 
         _grid.ResetNodes();
+
+        for (int i = 0; i < size; i++)
+        {
+            PathNode node = _grid.GetNode(i);
+            node.CostFromStart = int.MaxValue;
+            node.ParentIndex = -1;
+            _grid.SetNode(i, node);
+        }
 
         PathNode startNode = _grid.GetNode(startIndex);
         startNode.CostFromStart = 0;
@@ -46,6 +67,7 @@ public class Pathfinder
         _grid.SetNode(startIndex, startNode);
 
         _openList.Add(startIndex);
+        _inOpenSet[startIndex] = true; 
     }
 
     public List<int> BuildPath(int endIndex)
@@ -66,7 +88,7 @@ public class Pathfinder
 
     public int GetLowestCostNode()
     {
-        if (IsEmpty())
+        if (_openList.Count == 0)
             return -1;
 
         int bestIndex = 0;
@@ -86,8 +108,11 @@ public class Pathfinder
         }
 
         int result = _openList[bestIndex];
+
         _openList.RemoveAt(bestIndex);
         _closedSet[result] = true;
+        _inOpenSet[result] = false;
+
         return result;
     }
 
@@ -128,11 +153,9 @@ public class Pathfinder
 
             PathNode neighborNode = _grid.GetNode(neighborIndex);
 
-            // 4. CostFromStart 계산
-            int moveCost = 1;
-            int newCost = currentNode.CostFromStart + moveCost;
+            int newCost = currentNode.CostFromStart + 1;
 
-            // 5. 더 짧은 경로면 갱신
+            // 4. 비용 비교
             if (newCost < neighborNode.CostFromStart)
             {
                 neighborNode.CostFromStart = newCost;
@@ -141,37 +164,32 @@ public class Pathfinder
 
                 _grid.SetNode(neighborIndex, neighborNode);
 
-                // 6. OpenList 추가
-                if (!_openList.Contains(neighborIndex))
+                // Contains 제거 → O(1)
+                if (!_inOpenSet[neighborIndex])
+                {
                     _openList.Add(neighborIndex);
+                    _inOpenSet[neighborIndex] = true;
+                }
             }
         }
     }
 
     public bool Step(out int currentIndex)
     {
-        // 가장 좋은 노드 선택
         currentIndex = GetLowestCostNode();
 
-        // 목표 도달 체크
+        // 안전 처리
+        if (currentIndex == -1)
+            return false;
+
+        VisitedNodeCount++;
+
         if (currentIndex == _endIndex)
             return true;
 
-        // 이웃 확장
         ExpandNode(currentIndex);
 
         return false;
-    }
-
-    public void Debug_AddNode(int index, int cost)
-    {
-        PathNode node = _grid.GetNode(index);
-        node.CostFromStart = cost;
-        node.CostToGoal = 0;
-
-        _grid.SetNode(index, node);
-
-        _openList.Add(index);
     }
 
     public bool IsEmpty()

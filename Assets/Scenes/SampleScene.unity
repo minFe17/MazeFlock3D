@@ -469,8 +469,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8b60a30f5cc2d4e48b08a65f49aa10b8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _mapSeed: 123
+  _mapSeed: 200
   _usePrimMaze: 1
+  _width: 200
+  _height: 200
 --- !u!4 &1206117962
 Transform:
   m_ObjectHideFlags: 0
@@ -499,7 +501,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _runner: {fileID: 1206117961}
-  _testMode: 2
+  _testMode: 1
   _testSeed: 999
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

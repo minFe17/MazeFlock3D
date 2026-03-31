@@ -12,8 +12,9 @@ public class Pathfinding : MonoBehaviour
     [SerializeField] int _mapSeed;
     [SerializeField] bool _usePrimMaze = true;
 
-    int _width = 10;
-    int _height = 10;
+    [Header("Map Size")]
+    [SerializeField] int _width = 50;
+    [SerializeField] int _height = 50;
 
     GridSystem _grid;
     Pathfinder _pathfinder;
@@ -36,50 +37,6 @@ public class Pathfinding : MonoBehaviour
             MapBuilder.CreatePrimMaze(_grid, _width, _height);
         else
             MapBuilder.CreateObstacle(_grid, _width, _height);
-    }
-
-    public void Run(int start, int end)
-    {
-        _path = RunAndGetPath(start, end);
-    }
-
-    public List<int> RunAndGetPath(int start, int end)
-    {
-        if (start < 0 || end < 0)
-        {
-            Debug.LogError("Invalid start/end index");
-            return null;
-        }
-
-        if (start == end)
-            return new List<int> { start };
-
-        _pathfinder.BeginSearch(start, end);
-
-        int maxIteration = _grid.Width * _grid.Height;
-        int iteration = 0;
-
-        while (true)
-        {
-            iteration++;
-
-            if (iteration > maxIteration)
-            {
-                Debug.LogError("Pathfinding 무한 루프 방지 (MaxIteration 초과)");
-                return null;
-            }
-
-            bool reached = _pathfinder.Step(out int current);
-
-            if (reached)
-            {
-                List<int> rawPath = _pathfinder.BuildPath(end);
-                return SmoothPath(rawPath);
-            }
-
-            if (_pathfinder.IsEmpty())
-                return null;
-        }
     }
 
     List<int> SmoothPath(List<int> path)
@@ -124,6 +81,54 @@ public class Pathfinding : MonoBehaviour
         return new Vector2Int(toX - fromX, toY - fromY);
     }
 
+    public List<int> RunAndGetPath(int start, int end)
+    {
+        if (start < 0 || end < 0)
+        {
+            Debug.LogError("Invalid start/end index");
+            return null;
+        }
+
+        if (start == end)
+        {
+            _path = new List<int> { start };
+            return _path;
+        }
+
+        _pathfinder.BeginSearch(start, end);
+
+        int maxIteration = _grid.Width * _grid.Height;
+        int iteration = 0;
+
+        while (true)
+        {
+            iteration++;
+
+            if (iteration > maxIteration)
+            {
+                Debug.LogError("Pathfinding 무한 루프 방지 (MaxIteration 초과)");
+                return null;
+            }
+
+            bool reached = _pathfinder.Step(out int current);
+
+            if (reached)
+            {
+                List<int> rawPath = _pathfinder.BuildPath(end);
+                _path = SmoothPath(rawPath);
+                return _path;
+            }
+
+            if (_pathfinder.IsEmpty())
+                return null;
+        }
+    }
+
+    public int GetVisitedNodeCount()
+    {
+        return _pathfinder.VisitedNodeCount;
+    }
+
     public List<int> RunRawPath(int start, int end)
     {
         if (start < 0 || end < 0)
@@ -152,8 +157,6 @@ public class Pathfinding : MonoBehaviour
         if (_grid == null) 
             return;
 
-        GUIStyle style = new GUIStyle();
-
         // Grid
         for (int x = 0; x < _width; x++)
         {
@@ -165,11 +168,6 @@ public class Pathfinding : MonoBehaviour
 
                 Gizmos.color = cell.Walkable ? Color.white : Color.red;
                 Gizmos.DrawWireCube(pos, Vector3.one);
-
-#if UNITY_EDITOR
-                style.normal.textColor = cell.Walkable ? Color.white : Color.red;
-                Handles.Label(pos, $"{x},{y}", style);
-#endif
             }
         }
 

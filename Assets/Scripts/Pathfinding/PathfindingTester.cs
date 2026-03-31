@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 /// <summary>
 /// Pathfinding 테스트 전용 클래스
@@ -25,8 +27,10 @@ public class PathfindingTester : MonoBehaviour
 
         Debug.Log($"Start: {start}, End: {end}");
 
-        RunPathfinding(start, end);
-        ValidateAll(grid, start, end, rawPath);
+        // 여기 중요
+        List<int> path = RunPathfinding(start, end);
+
+        ValidateAll(grid, start, end, rawPath, path);
     }
 
     bool TryFindValidPath(GridSystem grid, out int start, out int end, out List<int> rawPath)
@@ -47,19 +51,55 @@ public class PathfindingTester : MonoBehaviour
         return rawPath != null;
     }
 
-    void RunPathfinding(int start, int end)
+    List<int> RunPathfinding(int start, int end)
     {
-        _runner.Run(start, end);
+        const int TEST_COUNT = 20;
+
+        double totalTime = 0;
+        double minTime = double.MaxValue;
+        double maxTime = double.MinValue;
+
+        int totalVisited = 0;
+
+        List<int> finalPath = null;
+
+        _runner.RunAndGetPath(start, end);
+
+        for (int i = 0; i < TEST_COUNT; i++)
+        {
+            Stopwatch sw = Stopwatch.StartNew();
+
+            finalPath = _runner.RunAndGetPath(start, end);
+
+            sw.Stop();
+
+            double time = sw.Elapsed.TotalMilliseconds;
+            totalTime += time;
+
+            int visited = _runner.GetVisitedNodeCount();
+            totalVisited += visited;
+
+            if (time < minTime) minTime = time;
+            if (time > maxTime) maxTime = time;
+        }
+
+        double avgTime = totalTime / TEST_COUNT;
+        int avgVisited = totalVisited / TEST_COUNT;
+
+        Debug.Log($"[Pathfinding] Avg Time: {avgTime:F3} ms");
+        Debug.Log($"[Pathfinding] Min Time: {minTime:F3} ms");
+        Debug.Log($"[Pathfinding] Max Time: {maxTime:F3} ms");
+        Debug.Log($"[Pathfinding] Avg Visited Nodes: {avgVisited}");
+
+        return finalPath;
     }
 
-    void ValidateAll(GridSystem grid, int start, int end, List<int> rawPath)
+    void ValidateAll(GridSystem grid, int start, int end, List<int> rawPath, List<int> path)
     {
         int width = grid.Width;
 
         bool isValid = ValidatePath(rawPath, grid);
         Debug.Log($"경로 검증 결과: {isValid}");
-
-        List<int> path = _runner.RunAndGetPath(start, end);
 
         if (path != null)
         {
