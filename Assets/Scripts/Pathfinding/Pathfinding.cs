@@ -10,7 +10,7 @@ using System.Collections.Generic;
 public class Pathfinding : MonoBehaviour
 {
     [SerializeField] int _mapSeed;
-    [SerializeField] bool _usePrimMaze = true;
+    [SerializeField] EMapType _mapType;
 
     [Header("Map Size")]
     [SerializeField] int _width = 50;
@@ -33,10 +33,16 @@ public class Pathfinding : MonoBehaviour
 
         _pathfinder = new Pathfinder(_grid);
 
-        if (_usePrimMaze)
-            MapBuilder.CreatePrimMaze(_grid, _width, _height);
-        else
-            MapBuilder.CreateObstacle(_grid, _width, _height);
+        switch (_mapType)
+        {
+            case EMapType.PrimMaze:
+                MapBuilder.CreatePrimMaze(_grid, _width, _height);
+                break;
+
+            case EMapType.Obstacle:
+                MapBuilder.CreateObstacle(_grid, _width, _height, 0.05f);
+                break;
+        }
     }
 
     List<int> SmoothPath(List<int> path)

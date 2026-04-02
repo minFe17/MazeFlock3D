@@ -8,25 +8,118 @@ public static class MapBuilder
 {
     static Vector2Int[] _directions = { Vector2Int.left, Vector2Int.right, Vector2Int.up, Vector2Int.down };
 
-    // 기존 장애물 생성
-    public static void CreateObstacle(GridSystem grid, int width, int height)
+    // 랜덤 장애물 생성 + 연결성 보장
+    public static void CreateObstacle(GridSystem grid, int width, int height, float noiseRate = 0.1f)
     {
-        for (int x = 0; x < width; x++)
-        {
-            GridCell cell = grid.GetCell(x, 5);
-            cell.Walkable = false;
-            grid.SetCell(x, 5, cell);
-        }
+        // Prim으로 기본 구조 생성 (항상 연결됨)
+        CreatePrimMaze(grid, width, height);
 
-        GridCell gap = grid.GetCell(4, 5);
-        gap.Walkable = true;
-        grid.SetCell(4, 5, gap);
+        // 랜덤 노이즈 추가 (자연스러움)
+        AddNoise(grid, width, height, noiseRate);
+
+        // 연결성 보정 (혹시 끊긴 경우)
+        EnsureConnectivity(grid, width, height);
     }
 
-    // Prim 미로 생성
+    #region Noise
+    public static void AddNoise(GridSystem grid, int width, int height, float noiseRate)
+    {
+        for (int x = 1; x < width - 1; x++)
+        {
+            for (int y = 1; y < height - 1; y++)
+            {
+                GridCell cell = grid.GetCell(x, y);
+
+                if (!cell.Walkable && Random.value < noiseRate)
+                    cell.Walkable = true;
+                else if (cell.Walkable && Random.value < noiseRate * 0.05f)
+                    cell.Walkable = false;
+
+                grid.SetCell(x, y, cell);
+            }
+        }
+    }
+    #endregion
+
+    #region Connectivity Fix
+    static void EnsureConnectivity(GridSystem grid, int width, int height)
+    {
+        bool[,] visited = new bool[width, height];
+
+        List<Vector2Int> largest = new List<Vector2Int>();
+
+        // 모든 컴포넌트 탐색
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (!grid.GetCell(x, y).Walkable || visited[x, y])
+                    continue;
+
+                List<Vector2Int> current = BFS(grid, x, y, visited, width, height);
+
+                if (current.Count > largest.Count)
+                    largest = current;
+            }
+        }
+
+        // largest 제외 전부 막기
+        bool[,] keep = new bool[width, height];
+
+        foreach (Vector2Int p in largest)
+            keep[p.x, p.y] = true;
+
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (!keep[x, y])
+                {
+                    GridCell cell = grid.GetCell(x, y);
+                    cell.Walkable = false;
+                    grid.SetCell(x, y, cell);
+                }
+            }
+        }
+    }
+
+    static List<Vector2Int> BFS(GridSystem grid, int startX, int startY, bool[,] visited, int width, int height)
+    {
+        Queue<Vector2Int> queue = new Queue<Vector2Int>();
+        List<Vector2Int> result = new List<Vector2Int>();
+
+        queue.Enqueue(new Vector2Int(startX, startY));
+        visited[startX, startY] = true;
+
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            result.Add(current);
+
+            foreach (var direction in _directions)
+            {
+                int nextX = current.x + direction.x;
+                int nextY = current.y + direction.y;
+
+                if (!grid.IsInBounds(nextX, nextY)) 
+                    continue;
+                if (visited[nextX, nextY]) 
+                    continue;
+                if (!grid.GetCell(nextX, nextY).Walkable) 
+                    continue;
+
+                visited[nextX, nextY] = true;
+                queue.Enqueue(new Vector2Int(nextX, nextY));
+            }
+        }
+
+        return result;
+    }
+    #endregion
+
+    #region Prim
     public static void CreatePrimMaze(GridSystem grid, int width, int height)
     {
-        // 1. 전체 벽
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
@@ -37,7 +130,6 @@ public static class MapBuilder
             }
         }
 
-        // 2. 시작점 (짝수 좌표)
         int startX = Random.Range(0, width / 2) * 2;
         int startY = Random.Range(0, height / 2) * 2;
 
@@ -45,21 +137,11 @@ public static class MapBuilder
 
         List<Vector2Int> frontier = new List<Vector2Int>();
         HashSet<Vector2Int> frontierSet = new HashSet<Vector2Int>();
-        AddFrontier(grid, frontier, frontierSet, startX, startY, width, height);
 
-        int maxIteration = width * height * 4;
-        int iteration = 0;
+        AddFrontier(grid, frontier, frontierSet, startX, startY, width, height);
 
         while (frontier.Count > 0)
         {
-            iteration++;
-
-            if (iteration > maxIteration)
-            {
-                Debug.LogError("Maze Generation 무한 루프 방지");
-                break;
-            }
-
             int rand = Random.Range(0, frontier.Count);
             Vector2Int current = frontier[rand];
 
@@ -70,7 +152,6 @@ public static class MapBuilder
                 continue;
 
             List<Vector2Int> neighbors = GetNeighbors(grid, current, width, height);
-
             if (neighbors.Count == 0)
                 continue;
 
@@ -85,86 +166,57 @@ public static class MapBuilder
             AddFrontier(grid, frontier, frontierSet, current.x, current.y, width, height);
         }
     }
+    #endregion
 
     #region Helper
-    // 해당 좌표를 통로(길)로 변경
     static void SetPath(GridSystem grid, int x, int y)
     {
         GridCell cell = grid.GetCell(x, y);
-        cell.Walkable = true; 
+        cell.Walkable = true;
         grid.SetCell(x, y, cell);
     }
 
-    // 현재 셀 기준 2칸 떨어진 Frontier 후보 추가 (중복 방지)
-    static void AddFrontier(GridSystem grid, List<Vector2Int> frontier, HashSet<Vector2Int> frontierSet, int x, int y, int width, int height)
+    static void AddFrontier(GridSystem grid, List<Vector2Int> frontier, HashSet<Vector2Int> set, int x, int y, int w, int h)
     {
-        foreach (Vector2Int dir in _directions)
+        foreach (Vector2Int direction in _directions)
         {
-            // 2칸 이동 (벽 사이 구조 유지)
-            Vector2Int direction = dir * 2; 
-            int nextX = x + direction.x;
-            int nextY = y + direction.y;
+            Vector2Int d = direction * 2;
 
-            // Grid 범위 밖 제외
-            if (nextX < 0 || nextY < 0 || nextX >= width || nextY >= height)
+            int nextX = x + d.x;
+            int nextY = y + d.y;
+
+            if (nextX < 0 || nextY < 0 || nextX >= w || nextY >= h)
                 continue;
 
-            // 아직 벽인 셀만 대상
             if (!grid.GetCell(nextX, nextY).Walkable)
             {
                 Vector2Int next = new Vector2Int(nextX, nextY);
 
-                if (frontierSet.Add(next))
+                if (set.Add(next))
                     frontier.Add(next);
             }
         }
     }
 
-    // 현재 셀에서 연결 가능한 2칸 떨어진 통로 셀 탐색
     static List<Vector2Int> GetNeighbors(GridSystem grid, Vector2Int pos, int width, int height)
     {
         List<Vector2Int> result = new List<Vector2Int>();
 
-        foreach (Vector2Int dir in _directions)
-        {
-            // 2칸 이동
-            Vector2Int direction = dir * 2; 
-            int nextX = pos.x + direction.x;
-            int nextY = pos.y + direction.y;
-
-            // Grid 범위 체크
-            if (nextX < 0 || nextY < 0 || nextX >= width || nextY >= height)
-                continue; 
-
-            // 이미 연결된 통로만 반환
-            if (grid.GetCell(nextX, nextY).Walkable)
-                result.Add(new Vector2Int(nextX, nextY)); 
-        }
-
-        return result;
-    }
-
-    // 주변 1칸 내 통로 개수를 체크하여 사이클 생성 여부 판단
-    static bool CanConnect(GridSystem grid, int x, int y, int width, int height)
-    {
-        int pathCount = 0;
-
         foreach (Vector2Int direction in _directions)
         {
-            int nextX = x + direction.x;
-            int nextY = y + direction.y;
+            Vector2Int d = direction * 2;
 
-            // Grid 범위 체크
+            int nextX = pos.x + d.x;
+            int nextY = pos.y + d.y;
+
             if (nextX < 0 || nextY < 0 || nextX >= width || nextY >= height)
                 continue;
 
-            // 주변 통로 개수 카운트
             if (grid.GetCell(nextX, nextY).Walkable)
-                pathCount++; 
+                result.Add(new Vector2Int(nextX, nextY));
         }
 
-        // 2개 이상 연결 시 사이클 발생 → 제한
-        return pathCount <= 1; 
+        return result;
     }
     #endregion
 }

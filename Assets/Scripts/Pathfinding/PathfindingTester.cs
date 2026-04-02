@@ -26,7 +26,6 @@ public class PathfindingTester : MonoBehaviour
         }
 
         Debug.Log($"Start: {start}, End: {end}");
-
         // 여기 중요
         List<int> path = RunPathfinding(start, end);
 
@@ -38,17 +37,27 @@ public class PathfindingTester : MonoBehaviour
         int width = grid.Width;
         int height = grid.Height;
 
-        GetStartEnd(grid, width, height, out start, out end);
+        const int MAX_TRY = 30;
 
-        if (start == -1 || end == -1)
+        for (int i = 0; i < MAX_TRY; i++)
         {
-            rawPath = null;
-            return false;
+            GetStartEnd(grid, width, height, out start, out end);
+
+            if (start == -1 || end == -1)
+                continue;
+
+            rawPath = _runner.RunRawPath(start, end);
+
+            if (rawPath != null)
+                return true;
         }
 
-        rawPath = _runner.RunRawPath(start, end);
+        // 실패
+        start = -1;
+        end = -1;
+        rawPath = null;
 
-        return rawPath != null;
+        return false;
     }
 
     List<int> RunPathfinding(int start, int end)
@@ -112,82 +121,50 @@ public class PathfindingTester : MonoBehaviour
 
     void GetStartEnd(GridSystem grid, int width, int height, out int start, out int end)
     {
+        int cx = width / 2;
+        int cy = height / 2;
+
         switch (_testMode)
         {
-            case ETestMode.CenterToEdge:
-                {
-                    // 중앙 시작
-                    int cx = width / 2;
-                    int cy = height / 2;
+            case ETestMode.CenterToTopEdge:
+                start = GetNearestWalkable(grid, grid.GetIndex(cx, cy), width, height);
+                end = GetNearestWalkable(grid, grid.GetIndex(cx, height - 1), width, height);
+                break;
 
-                    start = GetNearestWalkable(grid, grid.GetIndex(cx, cy), width, height);
+            case ETestMode.CenterToBottomEdge:
+                start = GetNearestWalkable(grid, grid.GetIndex(cx, cy), width, height);
+                end = GetNearestWalkable(grid, grid.GetIndex(cx, 0), width, height);
+                break;
 
-                    // 외곽 (Seed 기반 선택)
-                    int side = _testSeed % 4;
+            case ETestMode.CenterToLeftEdge:
+                start = GetNearestWalkable(grid, grid.GetIndex(cx, cy), width, height);
+                end = GetNearestWalkable(grid, grid.GetIndex(0, cy), width, height);
+                break;
 
-                    int ex = 0;
-                    int ey = 0;
+            case ETestMode.CenterToRightEdge:
+                start = GetNearestWalkable(grid, grid.GetIndex(cx, cy), width, height);
+                end = GetNearestWalkable(grid, grid.GetIndex(width - 1, cy), width, height);
+                break;
 
-                    switch (side)
-                    {
-                        case 0: // 위
-                            ex = _testSeed % width;
-                            ey = height - 1;
-                            break;
+            case ETestMode.CornerToCorner_Diagonal1: 
+                start = GetNearestWalkable(grid, grid.GetIndex(0, 0), width, height);
+                end = GetNearestWalkable(grid, grid.GetIndex(width - 1, height - 1), width, height);
+                break;
 
-                        case 1: // 아래
-                            ex = _testSeed % width;
-                            ey = 0;
-                            break;
-
-                        case 2: // 왼쪽
-                            ex = 0;
-                            ey = _testSeed % height;
-                            break;
-
-                        case 3: // 오른쪽
-                            ex = width - 1;
-                            ey = _testSeed % height;
-                            break;
-                    }
-
-                    end = GetNearestWalkable(grid, grid.GetIndex(ex, ey), width, height);
-                    break;
-                }
-
-            case ETestMode.CornerToCorner:
-                {
-                    start = GetNearestWalkable(grid, grid.GetIndex(0, 0), width, height);
-                    end = GetNearestWalkable(grid, grid.GetIndex(width - 1, height - 1), width, height);
-                    break;
-                }
-
-            case ETestMode.CenterToCorner:
-                {
-                    int cx = width / 2;
-                    int cy = height / 2;
-
-                    start = GetNearestWalkable(grid, grid.GetIndex(cx, cy), width, height);
-                    end = GetNearestWalkable(grid, grid.GetIndex(width - 1, height - 1), width, height);
-                    break;
-                }
+            case ETestMode.CornerToCorner_Diagonal2: 
+                start = GetNearestWalkable(grid, grid.GetIndex(0, height - 1), width, height);
+                end = GetNearestWalkable(grid, grid.GetIndex(width - 1, 0), width, height);
+                break;
 
             case ETestMode.SameStartGoal:
-                {
-                    int cx = width / 2;
-                    int cy = height / 2;
-
-                    start = GetNearestWalkable(grid, grid.GetIndex(cx, cy), width, height);
-                    end = start;
-                    break;
-                }
+                start = GetNearestWalkable(grid, grid.GetIndex(cx, cy), width, height);
+                end = start;
+                break;
 
             default:
-                {
-                    start = -1;
-                    end = -1;
-                    break;
-                }
+                start = -1;
+                end = -1;
+                break;
         }
     }
 
