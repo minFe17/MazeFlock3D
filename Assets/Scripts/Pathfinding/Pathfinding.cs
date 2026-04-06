@@ -40,7 +40,7 @@ public class Pathfinding : MonoBehaviour
                 break;
 
             case EMapType.Obstacle:
-                MapBuilder.CreateObstacle(_grid, _width, _height, 0.05f);
+                MapBuilder.CreateObstacle(_grid, _width, _height, 0.7f);
                 break;
         }
     }

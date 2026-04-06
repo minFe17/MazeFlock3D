@@ -43,20 +43,25 @@ public class PathfindingTester : MonoBehaviour
         {
             GetStartEnd(grid, width, height, out start, out end);
 
+            Debug.Log($"[Try {i}] start={start}, end={end}");
+
             if (start == -1 || end == -1)
+            {
+                Debug.LogWarning($"[Try {i}] start/end 못 찾음");
                 continue;
+            }
 
             rawPath = _runner.RunRawPath(start, end);
+
+            Debug.Log($"[Try {i}] rawPath={rawPath?.Count.ToString() ?? "null"}");
 
             if (rawPath != null)
                 return true;
         }
 
-        // 실패
         start = -1;
         end = -1;
         rawPath = null;
-
         return false;
     }
 

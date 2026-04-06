@@ -91,4 +91,24 @@ public class GridSystem
     {
         _nodes[index] = node;
     }
+
+    public void SetWalkable(int x, int y, bool walkable)
+    {
+        int index = GetIndex(x, y);
+        GridCell cell = _cells[index];
+        cell.Walkable = walkable;
+        _cells[index] = cell;
+    }
+
+    public void SetWalkable(int index, bool walkable)
+    {
+        GridCell cell = _cells[index];
+        cell.Walkable = walkable;
+        _cells[index] = cell;
+    }
+
+    public GridCell GetCell(int index)
+    {
+        return _cells[index];
+    }
 }
