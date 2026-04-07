@@ -408,9 +408,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _mapSeed: 200
-  _mapType: 1
-  _width: 200
-  _height: 200
+  _mapType: 0
+  _width: 500
+  _height: 500
 --- !u!4 &1206117962
 Transform:
   m_ObjectHideFlags: 0

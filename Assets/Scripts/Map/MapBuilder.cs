@@ -177,16 +177,17 @@ public static class MapBuilder
 
         foreach (int index in candidates)
         {
-            if (placed >= targetWalls) break;
+            if (placed >= targetWalls)
+                break;
 
-            int cx = index % width;
-            int cy = index / width;
+            int currentX = index % width;
+            int currentY = index / width;
 
             int walkNeighbors = 0;
             for (int d = 0; d < 4; d++)
             {
-                int nextX = cx + _directions[d].x;
-                int nextY = cy + _directions[d].y;
+                int nextX = currentX + _directions[d].x;
+                int nextY = currentY + _directions[d].y;
 
                 if (!grid.IsInBounds(nextX, nextY))
                     continue;
@@ -197,11 +198,11 @@ public static class MapBuilder
                 continue;
 
             // 막아보고 연결성 깨지면 되돌리기
-            grid.SetWalkable(cx, cy, false);
+            grid.SetWalkable(currentX, currentY, false);
 
             if (!IsFullyConnected(grid, width, height))
             {
-                grid.SetWalkable(cx, cy, true);
+                grid.SetWalkable(currentX, currentY, true);
                 continue;
             }
             placed++;
@@ -231,7 +232,6 @@ public static class MapBuilder
                 }
             }
         }
-
 
         if (totalWalkable == 0) 
             return false;
@@ -271,36 +271,39 @@ public static class MapBuilder
     }
 
     // 루프 추가
-    static void AddLoops(GridSystem grid, int width, int height, int count)
+    static void AddLoops(GridSystem grid, int width, int height, int loopCount)
     {
-        int[] ldx = { 0, 1 };
-        int[] ldy = { 1, 0 };
-        int tries = count * 10;
+        int[] dirX = { 0, 1 };
+        int[] dirY = { 1, 0 };
 
-        for (int t = 0; t < tries && count > 0; t++)
+        int maxTry = loopCount * 10;
+
+        for (int attempt = 0; attempt < maxTry && loopCount > 0; attempt++)
         {
-            int x = Random.Range(1, width - 2);
-            int y = Random.Range(1, height - 2);
-            int d = Random.Range(0, 2);
+            int startX = Random.Range(1, width - 2);
+            int startY = Random.Range(1, height - 2);
 
-            int ax = x;
-            int ay = y;
-            int mx = x + ldx[d];
-            int my = y + ldy[d];
-            int bx = x + ldx[d] * 2; 
-            int by = y + ldy[d] * 2;
+            int directionIndex = Random.Range(0, 2);
 
-            if (bx <= 0 || bx >= width - 1 || by <= 0 || by >= height - 1) 
+            int midX = startX + dirX[directionIndex];
+            int midY = startY + dirY[directionIndex];
+
+            int endX = startX + dirX[directionIndex] * 2;
+            int endY = startY + dirY[directionIndex] * 2;
+
+            // 범위 체크
+            if (endX <= 0 || endX >= width - 1 || endY <= 0 || endY >= height - 1)
                 continue;
 
-            bool aWalk = grid.GetCell(ax, ay).Walkable;
-            bool bWalk = grid.GetCell(bx, by).Walkable;
-            bool mWall = !grid.GetCell(mx, my).Walkable;
+            bool startWalkable = grid.GetCell(startX, startY).Walkable;
+            bool endWalkable = grid.GetCell(endX, endY).Walkable;
+            bool midBlocked = !grid.GetCell(midX, midY).Walkable;
 
-            if (aWalk && bWalk && mWall)
+            // 두 길 사이 벽이면 뚫어서 루프 생성
+            if (startWalkable && endWalkable && midBlocked)
             {
-                grid.SetWalkable(mx, my, true);
-                count--;
+                grid.SetWalkable(midX, midY, true);
+                loopCount--;
             }
         }
     }

@@ -1,13 +1,16 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// A* Pathfinding 핵심 로직 담당
+/// OpenList를 MinHeap으로 최적화한 버전
+/// </summary>
 public class Pathfinder
 {
     GridSystem _grid;
 
-    List<int> _openList = new List<int>();
+    MinHeap _openList;              
     bool[] _closedSet;
-    bool[] _inOpenSet; 
 
     int _endIndex;
 
@@ -19,9 +22,9 @@ public class Pathfinder
 
         int size = _grid.Width * _grid.Height;
         _closedSet = new bool[size];
-        _inOpenSet = new bool[size];
     }
 
+    #region Heuristic
     int Heuristic(int first, int second)
     {
         int width = _grid.Width;
@@ -34,24 +37,25 @@ public class Pathfinder
 
         return Mathf.Abs(firstX - secondX) + Mathf.Abs(firstY - secondY);
     }
+    #endregion
 
+    #region Init
     public void BeginSearch(int startIndex, int endIndex)
     {
         _endIndex = endIndex;
 
-        _openList.Clear();
+        _openList = new MinHeap(_grid);
         VisitedNodeCount = 0;
 
         int size = _closedSet.Length;
 
+        // Closed 초기화
         for (int i = 0; i < size; i++)
-        {
             _closedSet[i] = false;
-            _inOpenSet[i] = false; 
-        }
 
         _grid.ResetNodes();
 
+        // Node 초기화
         for (int i = 0; i < size; i++)
         {
             PathNode node = _grid.GetNode(i);
@@ -60,16 +64,18 @@ public class Pathfinder
             _grid.SetNode(i, node);
         }
 
+        // Start 설정
         PathNode startNode = _grid.GetNode(startIndex);
         startNode.CostFromStart = 0;
         startNode.CostToGoal = Heuristic(startIndex, endIndex);
 
         _grid.SetNode(startIndex, startNode);
 
-        _openList.Add(startIndex);
-        _inOpenSet[startIndex] = true; 
+        _openList.Push(startIndex);
     }
+    #endregion
 
+    #region Path Build
     public List<int> BuildPath(int endIndex)
     {
         List<int> path = new List<int>();
@@ -85,37 +91,30 @@ public class Pathfinder
         path.Reverse();
         return path;
     }
+    #endregion
 
+    #region OpenList (Heap 기반)
+    // MinHeap에서 최소 비용 노드 반환
     public int GetLowestCostNode()
     {
-        if (_openList.Count == 0)
-            return -1;
-
-        int bestIndex = 0;
-        int bestNodeIndex = _openList[0];
-        PathNode bestNode = _grid.GetNode(bestNodeIndex);
-
-        for (int i = 1; i < _openList.Count; i++)
+        while (true)
         {
-            int nodeIndex = _openList[i];
-            PathNode node = _grid.GetNode(nodeIndex);
+            int result = _openList.Pop();
 
-            if (node.TotalCost < bestNode.TotalCost)
-            {
-                bestNode = node;
-                bestIndex = i;
-            }
+            if (result == -1)
+                return -1;
+
+            // 이미 처리된 노드면 skip
+            if (_closedSet[result])
+                continue;
+
+            _closedSet[result] = true;
+            return result;
         }
-
-        int result = _openList[bestIndex];
-
-        _openList.RemoveAt(bestIndex);
-        _closedSet[result] = true;
-        _inOpenSet[result] = false;
-
-        return result;
     }
+    #endregion
 
+    #region Expand
     public void ExpandNode(int currentIndex)
     {
         int width = _grid.Width;
@@ -129,7 +128,7 @@ public class Pathfinder
         {
             int neighborIndex = currentIndex + offsets[i];
 
-            // 1. 범위 체크
+            // 범위 체크
             if (neighborIndex < 0 || neighborIndex >= width * height)
                 continue;
 
@@ -140,11 +139,11 @@ public class Pathfinder
             if (Mathf.Abs(currentX - neighborX) > 1)
                 continue;
 
-            // 2. Closed 체크
+            // Closed 체크
             if (_closedSet[neighborIndex])
                 continue;
 
-            // 3. 장애물 체크
+            // 장애물 체크
             int x = neighborIndex % width;
             int y = neighborIndex / width;
 
@@ -155,7 +154,7 @@ public class Pathfinder
 
             int newCost = currentNode.CostFromStart + 1;
 
-            // 4. 비용 비교
+            // 비용 비교
             if (newCost < neighborNode.CostFromStart)
             {
                 neighborNode.CostFromStart = newCost;
@@ -164,21 +163,17 @@ public class Pathfinder
 
                 _grid.SetNode(neighborIndex, neighborNode);
 
-                // Contains 제거 → O(1)
-                if (!_inOpenSet[neighborIndex])
-                {
-                    _openList.Add(neighborIndex);
-                    _inOpenSet[neighborIndex] = true;
-                }
+                _openList.Push(neighborIndex);
             }
         }
     }
+    #endregion
 
+    #region Step
     public bool Step(out int currentIndex)
     {
         currentIndex = GetLowestCostNode();
 
-        // 안전 처리
         if (currentIndex == -1)
             return false;
 
@@ -191,7 +186,9 @@ public class Pathfinder
 
         return false;
     }
+    #endregion
 
+    #region Utils
     public bool IsEmpty()
     {
         return _openList.Count == 0;
@@ -201,4 +198,5 @@ public class Pathfinder
     {
         return _closedSet[index];
     }
+    #endregion
 }
