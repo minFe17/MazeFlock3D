@@ -4,12 +4,13 @@ using UnityEngine;
 /// <summary>
 /// A* Pathfinding 핵심 로직 담당
 /// OpenList를 MinHeap으로 최적화한 버전
+/// GC 및 불필요 연산 제거 적용
 /// </summary>
 public class Pathfinder
 {
     GridSystem _grid;
 
-    MinHeap _openList;              
+    MinHeap _openList;
     bool[] _closedSet;
 
     int _endIndex;
@@ -19,6 +20,7 @@ public class Pathfinder
     public Pathfinder(GridSystem grid)
     {
         _grid = grid;
+        _openList = new MinHeap(_grid);
 
         int size = _grid.Width * _grid.Height;
         _closedSet = new bool[size];
@@ -43,8 +45,7 @@ public class Pathfinder
     public void BeginSearch(int startIndex, int endIndex)
     {
         _endIndex = endIndex;
-
-        _openList = new MinHeap(_grid);
+        _openList.Clear();
         VisitedNodeCount = 0;
 
         int size = _closedSet.Length;
@@ -54,15 +55,6 @@ public class Pathfinder
             _closedSet[i] = false;
 
         _grid.ResetNodes();
-
-        // Node 초기화
-        for (int i = 0; i < size; i++)
-        {
-            PathNode node = _grid.GetNode(i);
-            node.CostFromStart = int.MaxValue;
-            node.ParentIndex = -1;
-            _grid.SetNode(i, node);
-        }
 
         // Start 설정
         PathNode startNode = _grid.GetNode(startIndex);
@@ -76,25 +68,23 @@ public class Pathfinder
     #endregion
 
     #region Path Build
-    public List<int> BuildPath(int endIndex)
+    public void BuildPath(int endIndex, List<int> buffer)
     {
-        List<int> path = new List<int>();
+        buffer.Clear();
 
         int current = endIndex;
 
         while (current != -1)
         {
-            path.Add(current);
+            buffer.Add(current);
             current = _grid.GetNode(current).ParentIndex;
         }
 
-        path.Reverse();
-        return path;
+        buffer.Reverse();
     }
     #endregion
 
     #region OpenList (Heap 기반)
-    // MinHeap에서 최소 비용 노드 반환
     public int GetLowestCostNode()
     {
         while (true)
@@ -104,7 +94,6 @@ public class Pathfinder
             if (result == -1)
                 return -1;
 
-            // 이미 처리된 노드면 skip
             if (_closedSet[result])
                 continue;
 
@@ -119,52 +108,57 @@ public class Pathfinder
     {
         int width = _grid.Width;
         int height = _grid.Height;
-
-        int[] offsets = { -width, width, -1, 1 };
+        int size = width * height;
 
         PathNode currentNode = _grid.GetNode(currentIndex);
+        int currentX = currentIndex % width;
 
-        for (int i = 0; i < offsets.Length; i++)
+        int newCost = currentNode.CostFromStart + 1;
+
+        int up = currentIndex - width;
+        if (up >= 0 && !_closedSet[up])
         {
-            int neighborIndex = currentIndex + offsets[i];
+            if (_grid.GetCell(up).Walkable)
+                ProcessNeighbor(currentIndex, up, newCost);
+        }
 
-            // 범위 체크
-            if (neighborIndex < 0 || neighborIndex >= width * height)
-                continue;
+        int down = currentIndex + width;
+        if (down < size && !_closedSet[down])
+        {
+            if (_grid.GetCell(down).Walkable)
+                ProcessNeighbor(currentIndex, down, newCost);
+        }
 
-            int currentX = currentIndex % width;
-            int neighborX = neighborIndex % width;
+        int left = currentIndex - 1;
+        if (left >= 0 && !_closedSet[left] && (left % width) == currentX - 1)
+        {
+            if (_grid.GetCell(left).Walkable)
+                ProcessNeighbor(currentIndex, left, newCost);
+        }
 
-            // 좌우 wrap 방지
-            if (Mathf.Abs(currentX - neighborX) > 1)
-                continue;
+        int right = currentIndex + 1;
+        if (right < size && !_closedSet[right] && (right % width) == currentX + 1)
+        {
+            if (_grid.GetCell(right).Walkable)
+                ProcessNeighbor(currentIndex, right, newCost);
+        }
+    }
+    #endregion
 
-            // Closed 체크
-            if (_closedSet[neighborIndex])
-                continue;
+    #region Neighbor 처리 분리
+    void ProcessNeighbor(int currentIndex, int neighborIndex, int newCost)
+    {
+        PathNode neighborNode = _grid.GetNode(neighborIndex);
 
-            // 장애물 체크
-            int x = neighborIndex % width;
-            int y = neighborIndex / width;
+        if (newCost < neighborNode.CostFromStart)
+        {
+            neighborNode.CostFromStart = newCost;
+            neighborNode.CostToGoal = Heuristic(neighborIndex, _endIndex);
+            neighborNode.ParentIndex = currentIndex;
 
-            if (!_grid.GetCell(x, y).Walkable)
-                continue;
+            _grid.SetNode(neighborIndex, neighborNode);
 
-            PathNode neighborNode = _grid.GetNode(neighborIndex);
-
-            int newCost = currentNode.CostFromStart + 1;
-
-            // 비용 비교
-            if (newCost < neighborNode.CostFromStart)
-            {
-                neighborNode.CostFromStart = newCost;
-                neighborNode.CostToGoal = Heuristic(neighborIndex, _endIndex);
-                neighborNode.ParentIndex = currentIndex;
-
-                _grid.SetNode(neighborIndex, neighborNode);
-
-                _openList.Push(neighborIndex);
-            }
+            _openList.Push(neighborIndex);
         }
     }
     #endregion

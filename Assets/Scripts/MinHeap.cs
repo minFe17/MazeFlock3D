@@ -24,6 +24,30 @@ public class MinHeap
         return a.CostToGoal < b.CostToGoal;
     }
 
+    void HeapifyDown(int current)
+    {
+        int count = _heap.Count;
+
+        while (true)
+        {
+            int left = current * 2 + 1;
+            int right = current * 2 + 2;
+            int smallest = current;
+
+            if (left < count && IsLess(_heap[left], _heap[smallest]))
+                smallest = left;
+
+            if (right < count && IsLess(_heap[right], _heap[smallest]))
+                smallest = right;
+
+            if (smallest == current)
+                break;
+
+            (_heap[current], _heap[smallest]) = (_heap[smallest], _heap[current]);
+            current = smallest;
+        }
+    }
+
     public void Push(int index)
     {
         _heap.Add(index);
@@ -63,27 +87,8 @@ public class MinHeap
         return root;
     }
 
-    void HeapifyDown(int current)
+    public void Clear()
     {
-        int count = _heap.Count;
-
-        while (true)
-        {
-            int left = current * 2 + 1;
-            int right = current * 2 + 2;
-            int smallest = current;
-
-            if (left < count && IsLess(_heap[left], _heap[smallest]))
-                smallest = left;
-
-            if (right < count && IsLess(_heap[right], _heap[smallest]))
-                smallest = right;
-
-            if (smallest == current)
-                break;
-
-            (_heap[current], _heap[smallest]) = (_heap[smallest], _heap[current]);
-            current = smallest;
-        }
+        _heap.Clear();
     }
 }

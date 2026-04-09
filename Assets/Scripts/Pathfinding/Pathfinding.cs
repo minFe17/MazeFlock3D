@@ -19,7 +19,9 @@ public class Pathfinding : MonoBehaviour
     GridSystem _grid;
     Pathfinder _pathfinder;
 
-    List<int> _path;
+    List<int> _path = new List<int>();
+    List<int> _rawPathBuffer = new List<int>();
+    List<int> _smoothBuffer = new List<int>();
 
     public GridSystem GetGrid() => _grid;
 
@@ -45,16 +47,18 @@ public class Pathfinding : MonoBehaviour
         }
     }
 
+    #region SmoothPath (GC 제거)
     List<int> SmoothPath(List<int> path)
     {
         if (path == null || path.Count < 3)
             return path;
 
-        List<int> result = new List<int>();
+        _smoothBuffer.Clear();
+
         int width = _grid.Width;
 
-        // 시작점 추가
-        result.Add(path[0]);
+        // 시작점
+        _smoothBuffer.Add(path[0]);
 
         for (int i = 1; i < path.Count - 1; i++)
         {
@@ -65,16 +69,16 @@ public class Pathfinding : MonoBehaviour
             Vector2Int dir1 = GetDirection(prev, current, width);
             Vector2Int dir2 = GetDirection(current, next, width);
 
-            // 방향이 바뀌는 지점만 유지
             if (dir1 != dir2)
-                result.Add(current);
+                _smoothBuffer.Add(current);
         }
 
-        // 끝점 추가
-        result.Add(path[path.Count - 1]);
+        // 끝점
+        _smoothBuffer.Add(path[path.Count - 1]);
 
-        return result;
+        return _smoothBuffer;
     }
+    #endregion
 
     Vector2Int GetDirection(int from, int to, int width)
     {
@@ -87,6 +91,7 @@ public class Pathfinding : MonoBehaviour
         return new Vector2Int(toX - fromX, toY - fromY);
     }
 
+    #region Run Path
     public List<int> RunAndGetPath(int start, int end)
     {
         if (start < 0 || end < 0)
@@ -97,7 +102,8 @@ public class Pathfinding : MonoBehaviour
 
         if (start == end)
         {
-            _path = new List<int> { start };
+            _path.Clear();
+            _path.Add(start);
             return _path;
         }
 
@@ -120,8 +126,10 @@ public class Pathfinding : MonoBehaviour
 
             if (reached)
             {
-                List<int> rawPath = _pathfinder.BuildPath(end);
-                _path = SmoothPath(rawPath);
+                _rawPathBuffer.Clear();
+                _pathfinder.BuildPath(end, _rawPathBuffer);
+
+                _path = SmoothPath(_rawPathBuffer);
                 return _path;
             }
 
@@ -130,18 +138,17 @@ public class Pathfinding : MonoBehaviour
         }
     }
 
-    public int GetVisitedNodeCount()
-    {
-        return _pathfinder.VisitedNodeCount;
-    }
-
     public List<int> RunRawPath(int start, int end)
     {
         if (start < 0 || end < 0)
             return null;
 
         if (start == end)
-            return new List<int> { start };
+        {
+            _rawPathBuffer.Clear();
+            _rawPathBuffer.Add(start);
+            return _rawPathBuffer;
+        }
 
         _pathfinder.BeginSearch(start, end);
 
@@ -150,17 +157,27 @@ public class Pathfinding : MonoBehaviour
             bool reached = _pathfinder.Step(out int current);
 
             if (reached)
-                return _pathfinder.BuildPath(end);
+            {
+                _rawPathBuffer.Clear();
+                _pathfinder.BuildPath(end, _rawPathBuffer);
+                return _rawPathBuffer;
+            }
 
             if (_pathfinder.IsEmpty())
                 return null;
         }
     }
+    #endregion
+
+    public int GetVisitedNodeCount()
+    {
+        return _pathfinder.VisitedNodeCount;
+    }
 
     #region Gizmos
     void OnDrawGizmos()
     {
-        if (_grid == null) 
+        if (_grid == null)
             return;
 
         // Grid
@@ -177,7 +194,7 @@ public class Pathfinding : MonoBehaviour
             }
         }
 
-        if (_path == null) 
+        if (_path == null)
             return;
 
         // Path
