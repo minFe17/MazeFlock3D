@@ -1,3 +1,4 @@
+using Unity.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -5,36 +6,49 @@ using UnityEngine;
 /// </summary>
 public class GridSystem
 {
-    GridCell[] _cells;
-    PathNode[] _nodes;
+    NativeArray<bool> _walkables;
+    NativeArray<PathNode> _nodes;
 
     int _width;
     int _height;
 
-    public int Width { get => _width; }
-    public int Height { get => _height; }
+    public NativeArray<bool> Walkables => _walkables;
+    public NativeArray<PathNode> Nodes => _nodes;
+    public int Width => _width;
+    public int Height => _height;
 
     public void CreateGrid(int width, int height)
     {
+        Dispose();
+
         _width = width;
         _height = height;
 
-        _cells = new GridCell[width * height];
-        _nodes = new PathNode[width * height];
+        int size = width * height;
+        _walkables = new NativeArray<bool>(size, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+        _nodes = new NativeArray<PathNode>(size, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 
-        // GridCell 초기화
-        for (int i = 0; i < _cells.Length; i++)
-            _cells[i].Walkable = true;
+        for (int i = 0; i < size; i++)
+            _walkables[i] = true;
 
         // PathNode 초기화
         ResetNodes();
+    }
+
+    public void Dispose()
+    {
+        if (_walkables.IsCreated)
+            _walkables.Dispose();
+
+        if (_nodes.IsCreated)
+            _nodes.Dispose();
     }
 
     public void ResetNodes()
     {
         for (int i = 0; i < _nodes.Length; i++)
         {
-            PathNode node = _nodes[i];
+            PathNode node = default;
             node.Init();
             _nodes[i] = node;
         }
@@ -61,13 +75,13 @@ public class GridSystem
     public GridCell GetCell(int x, int y)
     {
         int index = GetIndex(x, y);
-        return _cells[index];
+        return new GridCell { Walkable = _walkables[index] };
     }
 
     public void SetCell(int x, int y, GridCell cell)
     {
         int index = GetIndex(x, y);
-        _cells[index] = cell;
+        _walkables[index] = cell.Walkable;
     }
 
     public PathNode GetNode(int x, int y)
@@ -95,20 +109,16 @@ public class GridSystem
     public void SetWalkable(int x, int y, bool walkable)
     {
         int index = GetIndex(x, y);
-        GridCell cell = _cells[index];
-        cell.Walkable = walkable;
-        _cells[index] = cell;
+        _walkables[index] = walkable;
     }
 
     public void SetWalkable(int index, bool walkable)
     {
-        GridCell cell = _cells[index];
-        cell.Walkable = walkable;
-        _cells[index] = cell;
+        _walkables[index] = walkable;
     }
 
     public GridCell GetCell(int index)
     {
-        return _cells[index];
+        return new GridCell { Walkable = _walkables[index] };
     }
 }

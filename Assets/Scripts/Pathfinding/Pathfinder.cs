@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -8,7 +9,9 @@ using UnityEngine;
 /// </summary>
 public class Pathfinder
 {
-    GridSystem _grid;
+    readonly GridSystem _grid;
+    readonly NativeArray<bool> _walkables;
+    NativeArray<PathNode> _nodes;
 
     MinHeap _openList;
     bool[] _closedSet;
@@ -20,13 +23,15 @@ public class Pathfinder
     public Pathfinder(GridSystem grid)
     {
         _grid = grid;
-        _openList = new MinHeap(_grid);
+        _walkables = grid.Walkables;
+        _nodes = grid.Nodes;
+
+        _openList = new MinHeap(_nodes);
 
         int size = _grid.Width * _grid.Height;
         _closedSet = new bool[size];
     }
 
-    #region Heuristic
     int Heuristic(int first, int second)
     {
         int width = _grid.Width;
@@ -39,9 +44,7 @@ public class Pathfinder
 
         return Mathf.Abs(firstX - secondX) + Mathf.Abs(firstY - secondY);
     }
-    #endregion
 
-    #region Init
     public void BeginSearch(int startIndex, int endIndex)
     {
         _endIndex = endIndex;
@@ -57,17 +60,15 @@ public class Pathfinder
         _grid.ResetNodes();
 
         // Start 설정
-        PathNode startNode = _grid.GetNode(startIndex);
+        PathNode startNode = _nodes[startIndex];
         startNode.CostFromStart = 0;
         startNode.CostToGoal = Heuristic(startIndex, endIndex);
 
-        _grid.SetNode(startIndex, startNode);
+        _nodes[startIndex] = startNode;
 
         _openList.Push(startIndex);
     }
-    #endregion
 
-    #region Path Build
     public void BuildPath(int endIndex, List<int> buffer)
     {
         buffer.Clear();
@@ -82,9 +83,7 @@ public class Pathfinder
 
         buffer.Reverse();
     }
-    #endregion
 
-    #region OpenList (Heap 기반)
     public int GetLowestCostNode()
     {
         while (true)
@@ -101,54 +100,38 @@ public class Pathfinder
             return result;
         }
     }
-    #endregion
 
-    #region Expand
     public void ExpandNode(int currentIndex)
     {
         int width = _grid.Width;
         int height = _grid.Height;
         int size = width * height;
 
-        PathNode currentNode = _grid.GetNode(currentIndex);
+        PathNode currentNode = _nodes[currentIndex];
         int currentX = currentIndex % width;
 
         int newCost = currentNode.CostFromStart + 1;
 
         int up = currentIndex - width;
-        if (up >= 0 && !_closedSet[up])
-        {
-            if (_grid.GetCell(up).Walkable)
-                ProcessNeighbor(currentIndex, up, newCost);
-        }
+        if (up >= 0 && !_closedSet[up] && _walkables[up])
+            ProcessNeighbor(currentIndex, up, newCost);
 
         int down = currentIndex + width;
-        if (down < size && !_closedSet[down])
-        {
-            if (_grid.GetCell(down).Walkable)
-                ProcessNeighbor(currentIndex, down, newCost);
-        }
+        if (down < size && !_closedSet[down] && _walkables[down])
+            ProcessNeighbor(currentIndex, down, newCost);
 
         int left = currentIndex - 1;
-        if (left >= 0 && !_closedSet[left] && (left % width) == currentX - 1)
-        {
-            if (_grid.GetCell(left).Walkable)
-                ProcessNeighbor(currentIndex, left, newCost);
-        }
+        if (left >= 0 && !_closedSet[left] && (left % width) == currentX - 1 && _walkables[left])
+            ProcessNeighbor(currentIndex, left, newCost);
 
         int right = currentIndex + 1;
-        if (right < size && !_closedSet[right] && (right % width) == currentX + 1)
-        {
-            if (_grid.GetCell(right).Walkable)
-                ProcessNeighbor(currentIndex, right, newCost);
-        }
+        if (right < size && !_closedSet[right] && (right % width) == currentX + 1 && _walkables[right])
+            ProcessNeighbor(currentIndex, right, newCost);
     }
-    #endregion
 
-    #region Neighbor 처리 분리
     void ProcessNeighbor(int currentIndex, int neighborIndex, int newCost)
     {
-        PathNode neighborNode = _grid.GetNode(neighborIndex);
+        PathNode neighborNode = _nodes[neighborIndex];
 
         if (newCost < neighborNode.CostFromStart)
         {
@@ -156,14 +139,12 @@ public class Pathfinder
             neighborNode.CostToGoal = Heuristic(neighborIndex, _endIndex);
             neighborNode.ParentIndex = currentIndex;
 
-            _grid.SetNode(neighborIndex, neighborNode);
+            _nodes[neighborIndex] = neighborNode;
 
             _openList.Push(neighborIndex);
         }
     }
-    #endregion
 
-    #region Step
     public bool Step(out int currentIndex)
     {
         currentIndex = GetLowestCostNode();
@@ -180,7 +161,6 @@ public class Pathfinder
 
         return false;
     }
-    #endregion
 
     #region Utils
     public bool IsEmpty()

@@ -1,22 +1,25 @@
 using System.Collections.Generic;
+using Unity.Collections;
+using UnityEngine;
 
 public class MinHeap
 {
-    List<int> _heap;
-    GridSystem _grid;
+    readonly List<int> _heap;
+    readonly NativeArray<PathNode> _nodes;
 
     public int Count => _heap.Count;
 
-    public MinHeap(GridSystem grid)
+    public MinHeap(NativeArray<PathNode> nodes)
     {
         _heap = new List<int>();
-        _grid = grid;
+        _nodes = nodes;
     }
+
 
     bool IsLess(int aIndex, int bIndex)
     {
-        PathNode a = _grid.GetNode(aIndex);
-        PathNode b = _grid.GetNode(bIndex);
+        PathNode a = _nodes[aIndex];
+        PathNode b = _nodes[bIndex];
 
         if (a.TotalCost != b.TotalCost)
             return a.TotalCost < b.TotalCost;

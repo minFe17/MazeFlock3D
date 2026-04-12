@@ -47,7 +47,13 @@ public class Pathfinding : MonoBehaviour
         }
     }
 
-    #region SmoothPath (GC Á¦°Å)
+    void OnDestroy()
+    {
+        if (_grid != null)
+            _grid.Dispose();
+    }
+
+
     List<int> SmoothPath(List<int> path)
     {
         if (path == null || path.Count < 3)
@@ -78,7 +84,6 @@ public class Pathfinding : MonoBehaviour
 
         return _smoothBuffer;
     }
-    #endregion
 
     Vector2Int GetDirection(int from, int to, int width)
     {
@@ -91,12 +96,25 @@ public class Pathfinding : MonoBehaviour
         return new Vector2Int(toX - fromX, toY - fromY);
     }
 
-    #region Run Path
+    bool IsWalkableIndex(int index)
+    {
+        if (index < 0 || index >= _grid.Width * _grid.Height)
+            return false;
+
+        return _grid.GetCell(index).Walkable;
+    }
+
     public List<int> RunAndGetPath(int start, int end)
     {
         if (start < 0 || end < 0)
         {
             Debug.LogError("Invalid start/end index");
+            return null;
+        }
+
+        if (!IsWalkableIndex(start) || !IsWalkableIndex(end))
+        {
+            Debug.LogWarning("Start or end is blocked, skip pathfinding");
             return null;
         }
 
@@ -122,7 +140,7 @@ public class Pathfinding : MonoBehaviour
                 return null;
             }
 
-            bool reached = _pathfinder.Step(out int current);
+            bool reached = _pathfinder.Step(out _);
 
             if (reached)
             {
@@ -143,6 +161,9 @@ public class Pathfinding : MonoBehaviour
         if (start < 0 || end < 0)
             return null;
 
+        if (!IsWalkableIndex(start) || !IsWalkableIndex(end))
+            return null;
+
         if (start == end)
         {
             _rawPathBuffer.Clear();
@@ -152,9 +173,19 @@ public class Pathfinding : MonoBehaviour
 
         _pathfinder.BeginSearch(start, end);
 
+        int maxIteration = _grid.Width * _grid.Height;
+        int iteration = 0;
+
         while (true)
         {
-            bool reached = _pathfinder.Step(out int current);
+            iteration++;
+            if (iteration > maxIteration)
+            {
+                Debug.LogWarning("RunRawPath iteration exceeded max iteration");
+                return null;
+            }
+
+            bool reached = _pathfinder.Step(out _);
 
             if (reached)
             {
@@ -167,7 +198,6 @@ public class Pathfinding : MonoBehaviour
                 return null;
         }
     }
-    #endregion
 
     public int GetVisitedNodeCount()
     {
