@@ -10,7 +10,6 @@ using System.Collections.Generic;
 public class Pathfinding : MonoBehaviour
 {
     [SerializeField] int _mapSeed;
-    [SerializeField] EMapType _mapType;
 
     [Header("Map Size")]
     [SerializeField] int _width = 50;
@@ -25,6 +24,8 @@ public class Pathfinding : MonoBehaviour
 
     public GridSystem GetGrid() => _grid;
 
+    const int MaxPathBuildSafety = 100000;
+
     void Awake()
     {
         Debug.Log($"Map Seed: {_mapSeed}");
@@ -34,17 +35,7 @@ public class Pathfinding : MonoBehaviour
         _grid.CreateGrid(_width, _height);
 
         _pathfinder = new Pathfinder(_grid);
-
-        switch (_mapType)
-        {
-            case EMapType.PrimMaze:
-                MapBuilder.CreatePrimMaze(_grid, _width, _height);
-                break;
-
-            case EMapType.Obstacle:
-                MapBuilder.CreateObstacle(_grid, _width, _height, 0.7f);
-                break;
-        }
+        MapBuilder.CreatePrimMaze(_grid, _width, _height);
     }
 
     void OnDestroy()
@@ -104,6 +95,30 @@ public class Pathfinding : MonoBehaviour
         return _grid.GetCell(index).Walkable;
     }
 
+    bool TryBuildRawPath(int end, List<int> output)
+    {
+        output.Clear();
+
+        int current = end;
+        int safety = 0;
+
+        while (current != -1)
+        {
+            if (++safety > MaxPathBuildSafety)
+            {
+                Debug.LogError("Path build safety break triggered (possible parent cycle)");
+                output.Clear();
+                return false;
+            }
+
+            output.Add(current);
+            current = _grid.GetNode(current).ParentIndex;
+        }
+
+        output.Reverse();
+        return true;
+    }
+
     public List<int> RunAndGetPath(int start, int end)
     {
         if (start < 0 || end < 0)
@@ -144,8 +159,8 @@ public class Pathfinding : MonoBehaviour
 
             if (reached)
             {
-                _rawPathBuffer.Clear();
-                _pathfinder.BuildPath(end, _rawPathBuffer);
+                if (!TryBuildRawPath(end, _rawPathBuffer))
+                    return null;
 
                 _path = SmoothPath(_rawPathBuffer);
                 return _path;
@@ -189,8 +204,8 @@ public class Pathfinding : MonoBehaviour
 
             if (reached)
             {
-                _rawPathBuffer.Clear();
-                _pathfinder.BuildPath(end, _rawPathBuffer);
+                if (!TryBuildRawPath(end, _rawPathBuffer))
+                    return null;
                 return _rawPathBuffer;
             }
 
