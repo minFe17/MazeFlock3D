@@ -4,43 +4,46 @@ using UnityEngine;
 
 /// <summary>
 /// A* Pathfinding 핵심 로직 담당
-/// OpenList를 MinHeap으로 최적화한 버전
-/// GC 및 불필요 연산 제거 적용
 /// </summary>
 public class Pathfinder
 {
-    readonly GridSystem _grid;
     readonly NativeArray<bool> _walkables;
     NativeArray<PathNode> _nodes;
 
+    readonly int _width;
+    readonly int _height;
+
     MinHeap _openList;
-    bool[] _closedSet;
+    NativeArray<byte> _state;
+
+    const byte STATE_NONE = 0;
+    const byte STATE_OPEN = 1;
+    const byte STATE_CLOSED = 2;
 
     int _endIndex;
 
     public int VisitedNodeCount { get; private set; }
 
-    public Pathfinder(GridSystem grid)
+    public Pathfinder(NativeArray<bool> walkables, NativeArray<PathNode> nodes, int width, int height)
     {
-        _grid = grid;
-        _walkables = grid.Walkables;
-        _nodes = grid.Nodes;
+        _walkables = walkables;
+        _nodes = nodes;
+        _width = width;
+        _height = height;
 
+        int size = width * height;
+
+        _state = new NativeArray<byte>(size, Allocator.Persistent);
         _openList = new MinHeap(_nodes);
-
-        int size = _grid.Width * _grid.Height;
-        _closedSet = new bool[size];
     }
 
     int Heuristic(int first, int second)
     {
-        int width = _grid.Width;
+        int firstX = first % _width;
+        int firstY = first / _width;
 
-        int firstX = first % width;
-        int firstY = first / width;
-
-        int secondX = second % width;
-        int secondY = second / width;
+        int secondX = second % _width;
+        int secondY = second / _width;
 
         return Mathf.Abs(firstX - secondX) + Mathf.Abs(firstY - secondY);
     }
@@ -48,16 +51,18 @@ public class Pathfinder
     public void BeginSearch(int startIndex, int endIndex)
     {
         _endIndex = endIndex;
-        _openList.Clear();
         VisitedNodeCount = 0;
 
-        int size = _closedSet.Length;
+        for (int i = 0; i < _state.Length; i++)
+            _state[i] = STATE_NONE;
 
-        // Closed 초기화
-        for (int i = 0; i < size; i++)
-            _closedSet[i] = false;
-
-        _grid.ResetNodes();
+        // ResetNodes 직접 처리 (GridSystem 제거)
+        for (int i = 0; i < _nodes.Length; i++)
+        {
+            PathNode node = _nodes[i];
+            node.Init();
+            _nodes[i] = node;
+        }
 
         // Start 설정
         PathNode startNode = _nodes[startIndex];
@@ -66,6 +71,8 @@ public class Pathfinder
 
         _nodes[startIndex] = startNode;
 
+        _state[startIndex] = STATE_OPEN;
+        _openList.Clear();
         _openList.Push(startIndex);
     }
 
@@ -78,59 +85,59 @@ public class Pathfinder
         while (current != -1)
         {
             buffer.Add(current);
-            current = _grid.GetNode(current).ParentIndex;
+            current = _nodes[current].ParentIndex;
         }
 
         buffer.Reverse();
     }
 
-    public int GetLowestCostNode()
+    int GetLowestCostNode()
     {
-        while (true)
+        while (_openList.Count > 0)
         {
-            int result = _openList.Pop();
+            int index = _openList.Pop();
 
-            if (result == -1)
-                return -1;
-
-            if (_closedSet[result])
+            if (_state[index] == STATE_CLOSED)
                 continue;
 
-            _closedSet[result] = true;
-            return result;
+            _state[index] = STATE_CLOSED;
+            return index;
         }
+
+        return -1;
     }
 
     public void ExpandNode(int currentIndex)
     {
-        int width = _grid.Width;
-        int height = _grid.Height;
-        int size = width * height;
+        int size = _width * _height;
 
         PathNode currentNode = _nodes[currentIndex];
-        int currentX = currentIndex % width;
+        int currentX = currentIndex % _width;
 
         int newCost = currentNode.CostFromStart + 1;
 
-        int up = currentIndex - width;
-        if (up >= 0 && !_closedSet[up] && _walkables[up])
+        int up = currentIndex - _width;
+        if (up >= 0 && _state[up] != STATE_CLOSED && _walkables[up])
             ProcessNeighbor(currentIndex, up, newCost);
 
-        int down = currentIndex + width;
-        if (down < size && !_closedSet[down] && _walkables[down])
+        int down = currentIndex + _width;
+        if (down < size && _state[down] != STATE_CLOSED && _walkables[down])
             ProcessNeighbor(currentIndex, down, newCost);
 
         int left = currentIndex - 1;
-        if (left >= 0 && !_closedSet[left] && (left % width) == currentX - 1 && _walkables[left])
+        if (left >= 0 && _state[left] != STATE_CLOSED && (left % _width) == currentX - 1 && _walkables[left])
             ProcessNeighbor(currentIndex, left, newCost);
 
         int right = currentIndex + 1;
-        if (right < size && !_closedSet[right] && (right % width) == currentX + 1 && _walkables[right])
+        if (right < size && _state[right] != STATE_CLOSED && (right % _width) == currentX + 1 && _walkables[right])
             ProcessNeighbor(currentIndex, right, newCost);
     }
 
     void ProcessNeighbor(int currentIndex, int neighborIndex, int newCost)
     {
+        if (_state[neighborIndex] == STATE_CLOSED)
+            return;
+
         PathNode neighborNode = _nodes[neighborIndex];
 
         if (newCost < neighborNode.CostFromStart)
@@ -141,6 +148,7 @@ public class Pathfinder
 
             _nodes[neighborIndex] = neighborNode;
 
+            _state[neighborIndex] = STATE_OPEN;
             _openList.Push(neighborIndex);
         }
     }
@@ -162,6 +170,12 @@ public class Pathfinder
         return false;
     }
 
+    public void Dispose()
+    {
+        if (_state.IsCreated)
+            _state.Dispose();
+    }
+
     #region Utils
     public bool IsEmpty()
     {
@@ -170,7 +184,7 @@ public class Pathfinder
 
     public bool IsClosed(int index)
     {
-        return _closedSet[index];
+        return _state[index] == STATE_CLOSED;
     }
     #endregion
 }

@@ -1,5 +1,4 @@
 using Unity.Collections;
-using UnityEngine;
 
 /// <summary>
 /// 2D Grid 기반의 맵 데이터를 관리하는 시스템
@@ -25,13 +24,13 @@ public class GridSystem
         _height = height;
 
         int size = width * height;
-        _walkables = new NativeArray<bool>(size, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-        _nodes = new NativeArray<PathNode>(size, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+
+        _walkables = new NativeArray<bool>(size, Allocator.Persistent);
+        _nodes = new NativeArray<PathNode>(size, Allocator.Persistent);
 
         for (int i = 0; i < size; i++)
             _walkables[i] = true;
 
-        // PathNode 초기화
         ResetNodes();
     }
 
@@ -59,66 +58,8 @@ public class GridSystem
         return y * _width + x;
     }
 
-    public Vector2Int GetPosition(int index)
-    {
-        int x = index % _width;
-        int y = index / _width;
-
-        return new Vector2Int(x, y);
-    }
-
-    public bool IsInBounds(int x, int y)
-    {
-        return x >= 0 && x < _width && y >= 0 && y < _height;
-    }
-
-    public GridCell GetCell(int x, int y)
-    {
-        int index = GetIndex(x, y);
-        return new GridCell { Walkable = _walkables[index] };
-    }
-
-    public void SetCell(int x, int y, GridCell cell)
-    {
-        int index = GetIndex(x, y);
-        _walkables[index] = cell.Walkable;
-    }
-
-    public PathNode GetNode(int x, int y)
-    {
-        int index = GetIndex(x, y);
-        return _nodes[index];
-    }
-
-    public PathNode GetNode(int index)
-    {
-        return _nodes[index];
-    }
-
-    public void SetNode(int x, int y, PathNode node)
-    {
-        int index = GetIndex(x, y);
-        _nodes[index] = node;
-    }
-
-    public void SetNode(int index, PathNode node)
-    {
-        _nodes[index] = node;
-    }
-
-    public void SetWalkable(int x, int y, bool walkable)
-    {
-        int index = GetIndex(x, y);
-        _walkables[index] = walkable;
-    }
-
     public void SetWalkable(int index, bool walkable)
     {
         _walkables[index] = walkable;
-    }
-
-    public GridCell GetCell(int index)
-    {
-        return new GridCell { Walkable = _walkables[index] };
     }
 }

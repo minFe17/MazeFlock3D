@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
+using Unity.Collections;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
@@ -151,12 +152,12 @@ public class PathfindingTester : MonoBehaviour
                 end = GetNearestWalkable(grid, grid.GetIndex(width - 1, cy), width, height);
                 break;
 
-            case ETestMode.CornerToCorner_Diagonal1: 
+            case ETestMode.CornerToCorner_Diagonal1:
                 start = GetNearestWalkable(grid, grid.GetIndex(0, 0), width, height);
                 end = GetNearestWalkable(grid, grid.GetIndex(width - 1, height - 1), width, height);
                 break;
 
-            case ETestMode.CornerToCorner_Diagonal2: 
+            case ETestMode.CornerToCorner_Diagonal2:
                 start = GetNearestWalkable(grid, grid.GetIndex(0, height - 1), width, height);
                 end = GetNearestWalkable(grid, grid.GetIndex(width - 1, 0), width, height);
                 break;
@@ -173,13 +174,13 @@ public class PathfindingTester : MonoBehaviour
         }
     }
 
-    int GetNearestWalkable(GridSystem grid, int index, int width, int height)
+    int GetNearestWalkable(GridSystem grid, int startIndex, int width, int height)
     {
-        int startX = index % width;
-        int startY = index / width;
+        int startX = startIndex % width;
+        int startY = startIndex / width;
 
-        if (grid.GetCell(startX, startY).Walkable)
-            return index;
+        if (grid.Walkables[startIndex])
+            return startIndex;
 
         Queue<Vector2Int> queue = new Queue<Vector2Int>();
         bool[,] visited = new bool[width, height];
@@ -189,25 +190,29 @@ public class PathfindingTester : MonoBehaviour
 
         while (queue.Count > 0)
         {
-            Vector2Int current = queue.Dequeue();
+            Vector2Int currentPos = queue.Dequeue();
 
-            if (grid.GetCell(current.x, current.y).Walkable)
-                return grid.GetIndex(current.x, current.y);
+            int currentIndex = currentPos.y * width + currentPos.x;
+
+            if (grid.Walkables[currentIndex])
+                return currentIndex;
 
             foreach (Vector2Int dir in _directions)
             {
-                int nextX = current.x + dir.x;
-                int nextY = current.y + dir.y;
+                int neighborX = currentPos.x + dir.x;
+                int neighborY = currentPos.y + dir.y;
 
-                if (!grid.IsInBounds(nextX, nextY)) 
-                    continue;
-                if (visited[nextX, nextY]) 
+                if (neighborX < 0 || neighborX >= width || neighborY < 0 || neighborY >= height)
                     continue;
 
-                visited[nextX, nextY] = true;
-                queue.Enqueue(new Vector2Int(nextX, nextY));
+                if (visited[neighborX, neighborY])
+                    continue;
+
+                visited[neighborX, neighborY] = true;
+                queue.Enqueue(new Vector2Int(neighborX, neighborY));
             }
         }
+
         return -1;
     }
 
@@ -220,27 +225,25 @@ public class PathfindingTester : MonoBehaviour
 
         for (int i = 0; i < path.Count - 1; i++)
         {
-            int a = path[i];
-            int b = path[i + 1];
+            int currentIndex = path[i];
+            int nextIndex = path[i + 1];
 
-            int x1 = a % width;
-            int y1 = a / width;
+            int currentX = currentIndex % width;
+            int currentY = currentIndex / width;
 
-            int x2 = b % width;
-            int y2 = b / width;
+            int nextX = nextIndex % width;
+            int nextY = nextIndex / width;
 
-            int dx = Mathf.Abs(x1 - x2);
-            int dy = Mathf.Abs(y1 - y2);
+            int deltaX = Mathf.Abs(currentX - nextX);
+            int deltaY = Mathf.Abs(currentY - nextY);
 
-            // 4방향 체크
-            if (dx + dy != 1)
+            if (deltaX + deltaY != 1)
             {
                 Debug.LogError("잘못된 이동 (대각선 or 점프)");
                 return false;
             }
 
-            // 장애물 체크
-            if (!grid.GetCell(x2, y2).Walkable)
+            if (!grid.Walkables[nextIndex])
             {
                 Debug.LogError("장애물 통과");
                 return false;
@@ -252,13 +255,13 @@ public class PathfindingTester : MonoBehaviour
 
     int GetManhattan(int start, int end, int width)
     {
-        int sx = start % width;
-        int sy = start / width;
+        int startX = start % width;
+        int startY = start / width;
 
-        int ex = end % width;
-        int ey = end / width;
+        int endX = end % width;
+        int endY = end / width;
 
-        return Mathf.Abs(sx - ex) + Mathf.Abs(sy - ey);
+        return Mathf.Abs(startX - endX) + Mathf.Abs(startY - endY);
     }
 
     void ValidateMaze(GridSystem grid)
@@ -266,60 +269,81 @@ public class PathfindingTester : MonoBehaviour
         int width = grid.Width;
         int height = grid.Height;
 
+        NativeArray<bool> walkables = grid.Walkables;
+
         int total = width * height;
         int pathCount = 0;
 
-        Vector2Int start = new Vector2Int(-1, -1);
+        int startIndex = -1;
 
         // 통로 개수 + 시작점 찾기
-        for (int x = 0; x < width; x++)
+        for (int i = 0; i < total; i++)
         {
-            for (int y = 0; y < height; y++)
+            if (walkables[i])
             {
-                if (grid.GetCell(x, y).Walkable)
-                {
-                    pathCount++;
+                pathCount++;
 
-                    if (start.x == -1)
-                        start = new Vector2Int(x, y);
-                }
+                if (startIndex == -1)
+                    startIndex = i;
             }
         }
 
-        if (start.x == -1)
+        if (startIndex == -1)
         {
             Debug.LogError("통로가 없음");
             return;
         }
 
         // BFS
-        bool[,] visited = new bool[width, height];
-        Queue<Vector2Int> queue = new Queue<Vector2Int>();
+        bool[] visited = new bool[total];
+        Queue<int> queue = new Queue<int>();
 
-        queue.Enqueue(start);
-        visited[start.x, start.y] = true;
+        queue.Enqueue(startIndex);
+        visited[startIndex] = true;
 
         int visitedCount = 1;
 
         while (queue.Count > 0)
         {
-            Vector2Int current = queue.Dequeue();
+            int current = queue.Dequeue();
 
-            foreach (Vector2Int direction in _directions)
+            int x = current % width;
+            int y = current / width;
+
+            // 상
+            int up = current - width;
+            if (up >= 0 && !visited[up] && walkables[up])
             {
-                int nextX = current.x + direction.x;
-                int nextY = current.y + direction.y;
-
-                if (!grid.IsInBounds(nextX, nextY)) 
-                    continue;
-                if (visited[nextX, nextY]) 
-                    continue;
-                if (!grid.GetCell(nextX, nextY).Walkable) 
-                    continue;
-
-                visited[nextX, nextY] = true;
+                visited[up] = true;
                 visitedCount++;
-                queue.Enqueue(new Vector2Int(nextX, nextY));
+                queue.Enqueue(up);
+            }
+
+            // 하
+            int down = current + width;
+            if (down < total && !visited[down] && walkables[down])
+            {
+                visited[down] = true;
+                visitedCount++;
+                queue.Enqueue(down);
+            }
+
+            // 좌
+            int left = current - 1;
+            if (left >= 0 && (left % width) == x - 1 && !visited[left] && walkables[left])
+            {
+                visited[left] = true;
+                visitedCount++;
+                queue.Enqueue(left);
+            }
+
+            // 우
+            int right = current + 1;
+            if (right < total && (right % width) == x + 1 && !visited[right] && walkables[right])
+            {
+                visited[right] = true;
+                visitedCount++;
+                queue.Enqueue(right);
             }
         }
 

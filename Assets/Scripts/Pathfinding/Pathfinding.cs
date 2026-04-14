@@ -1,8 +1,7 @@
 #if UNITY_EDITOR
-using UnityEditor;
 #endif
-using UnityEngine;
 using System.Collections.Generic;
+using UnityEngine;
 
 /// <summary>
 /// A* 실행, Grid 관리, Gizmos 시각화 담당
@@ -34,7 +33,7 @@ public class Pathfinding : MonoBehaviour
         _grid = new GridSystem();
         _grid.CreateGrid(_width, _height);
 
-        _pathfinder = new Pathfinder(_grid);
+        _pathfinder = new Pathfinder(_grid.Walkables, _grid.Nodes, _grid.Width, _grid.Height);
         MapBuilder.CreatePrimMaze(_grid, _width, _height);
     }
 
@@ -42,6 +41,9 @@ public class Pathfinding : MonoBehaviour
     {
         if (_grid != null)
             _grid.Dispose();
+
+        if (_pathfinder != null)
+            _pathfinder.Dispose();
     }
 
 
@@ -92,7 +94,7 @@ public class Pathfinding : MonoBehaviour
         if (index < 0 || index >= _grid.Width * _grid.Height)
             return false;
 
-        return _grid.GetCell(index).Walkable;
+        return _grid.Walkables[index];
     }
 
     bool TryBuildRawPath(int end, List<int> output)
@@ -112,7 +114,7 @@ public class Pathfinding : MonoBehaviour
             }
 
             output.Add(current);
-            current = _grid.GetNode(current).ParentIndex;
+            current = _grid.Nodes[current].ParentIndex;
         }
 
         output.Reverse();
@@ -230,11 +232,13 @@ public class Pathfinding : MonoBehaviour
         {
             for (int y = 0; y < _height; y++)
             {
-                GridCell cell = _grid.GetCell(x, y);
+                int index = y * _width + x;
+
+                bool walkable = _grid.Walkables[index];
 
                 Vector3 pos = new Vector3(x, 0, y);
 
-                Gizmos.color = cell.Walkable ? Color.white : Color.red;
+                Gizmos.color = walkable ? Color.white : Color.red;
                 Gizmos.DrawWireCube(pos, Vector3.one);
             }
         }
@@ -245,19 +249,28 @@ public class Pathfinding : MonoBehaviour
         // Path
         Gizmos.color = Color.green;
 
+        // Path 라인
         for (int i = 0; i < _path.Count - 1; i++)
         {
-            Vector2Int a = _grid.GetPosition(_path[i]);
-            Vector2Int b = _grid.GetPosition(_path[i + 1]);
+            int startIndex = _path[i];
+            int endIndex = _path[i + 1];
 
-            Gizmos.DrawLine(new Vector3(a.x, 0, a.y), new Vector3(b.x, 0, b.y));
+            int startX = startIndex % _width;
+            int startY = startIndex / _width;
+
+            int endX = endIndex % _width;
+            int endY = endIndex / _width;
+
+            Gizmos.DrawLine(new Vector3(startX, 0, startY), new Vector3(endX, 0, endY));
         }
 
         // Node 점
-        foreach (int index in _path)
+        foreach (int nodeIndex in _path)
         {
-            Vector2Int pos = _grid.GetPosition(index);
-            Gizmos.DrawSphere(new Vector3(pos.x, 0, pos.y), 0.2f);
+            int nodeX = nodeIndex % _width;
+            int nodeY = nodeIndex / _width;
+
+            Gizmos.DrawSphere(new Vector3(nodeX, 0, nodeY), 0.2f);
         }
     }
     #endregion
