@@ -1,6 +1,8 @@
 #if UNITY_EDITOR
 #endif
 using System.Collections.Generic;
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 
 /// <summary>
@@ -274,4 +276,38 @@ public class Pathfinding : MonoBehaviour
         }
     }
     #endregion
+
+    public void TestJob(int startIndex, int endIndex)
+    {
+        int size = _grid.Width * _grid.Height;
+
+        NativeArray<PathNode> nodes = new NativeArray<PathNode>(size, Allocator.TempJob);
+        NativeArray<byte> state = new NativeArray<byte>(size, Allocator.TempJob);
+
+        // 기존 grid 데이터 복사
+        for (int i = 0; i < size; i++)
+        {
+            nodes[i] = _grid.Nodes[i];
+        }
+
+        AStarJob job = new AStarJob
+        {
+            width = _grid.Width,
+            height = _grid.Height,
+            startIndex = startIndex,
+            endIndex = endIndex,
+            walkables = _grid.Walkables,
+            nodes = nodes,
+            state = state
+        };
+
+        JobHandle handle = job.Schedule();
+        handle.Complete();
+
+        // 결과 확인
+        Debug.Log($"Job Result: {nodes[startIndex].CostFromStart}");
+
+        nodes.Dispose();
+        state.Dispose();
+    }
 }

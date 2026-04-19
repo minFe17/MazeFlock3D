@@ -26,11 +26,12 @@ public class PathfindingTester : MonoBehaviour
             return;
         }
 
-        Debug.Log($"Start: {start}, End: {end}");
-        // 여기 중요
-        List<int> path = RunPathfinding(start, end);
+        //Debug.Log($"Start: {start}, End: {end}");
+        //// 여기 중요
+        //List<int> path = RunPathfinding(start, end);
 
-        ValidateAll(grid, start, end, rawPath, path);
+        //ValidateAll(grid, start, end, rawPath, path);
+        _runner.TestJob(start, end);
     }
 
     bool TryFindValidPath(GridSystem grid, out int start, out int end, out List<int> rawPath)
