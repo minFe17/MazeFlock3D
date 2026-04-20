@@ -223,6 +223,49 @@ public class Pathfinding : MonoBehaviour
         return _pathfinder.VisitedNodeCount;
     }
 
+    public List<int> RunJobAndBuildPath(int startIndex, int endIndex)
+    {
+        int size = _grid.Width * _grid.Height;
+
+        NativeArray<byte> state = new NativeArray<byte>(size, Allocator.TempJob);
+        NativeArray<int> openList = new NativeArray<int>(size, Allocator.TempJob);
+        NativeArray<int> result = new NativeArray<int>(1, Allocator.TempJob);
+
+        AStarJob job = new AStarJob
+        {
+            width = _grid.Width,
+            height = _grid.Height,
+            startIndex = startIndex,
+            endIndex = endIndex,
+            walkables = _grid.Walkables,
+            nodes = _grid.Nodes,
+            state = state,
+            openList = openList,
+            result = result
+        };
+
+        job.Run();
+
+        List<int> finalPath = null;
+
+        if (result[0] == 1)
+        {
+            if (TryBuildRawPath(endIndex, _rawPathBuffer))
+            {
+                _path = SmoothPath(_rawPathBuffer);
+                finalPath = _path;
+            }
+        }
+        else
+            _path = null;
+
+        state.Dispose();
+        openList.Dispose();
+        result.Dispose();
+
+        return finalPath;
+    }
+
     #region Gizmos
     void OnDrawGizmos()
     {
@@ -276,38 +319,4 @@ public class Pathfinding : MonoBehaviour
         }
     }
     #endregion
-
-    public void TestJob(int startIndex, int endIndex)
-    {
-        int size = _grid.Width * _grid.Height;
-
-        NativeArray<PathNode> nodes = new NativeArray<PathNode>(size, Allocator.TempJob);
-        NativeArray<byte> state = new NativeArray<byte>(size, Allocator.TempJob);
-
-        // 기존 grid 데이터 복사
-        for (int i = 0; i < size; i++)
-        {
-            nodes[i] = _grid.Nodes[i];
-        }
-
-        AStarJob job = new AStarJob
-        {
-            width = _grid.Width,
-            height = _grid.Height,
-            startIndex = startIndex,
-            endIndex = endIndex,
-            walkables = _grid.Walkables,
-            nodes = nodes,
-            state = state
-        };
-
-        JobHandle handle = job.Schedule();
-        handle.Complete();
-
-        // 결과 확인
-        Debug.Log($"Job Result: {nodes[startIndex].CostFromStart}");
-
-        nodes.Dispose();
-        state.Dispose();
-    }
 }

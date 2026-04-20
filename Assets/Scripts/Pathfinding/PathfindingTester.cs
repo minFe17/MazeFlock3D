@@ -31,7 +31,13 @@ public class PathfindingTester : MonoBehaviour
         //List<int> path = RunPathfinding(start, end);
 
         //ValidateAll(grid, start, end, rawPath, path);
-        _runner.TestJob(start, end);
+
+        List<int> jobPath = _runner.RunJobAndBuildPath(start, end);
+
+        if (jobPath == null)
+            Debug.LogError("Job 경로 생성 실패");
+        else
+            Debug.Log($"Job Path Length: {jobPath.Count}");
     }
 
     bool TryFindValidPath(GridSystem grid, out int start, out int end, out List<int> rawPath)
