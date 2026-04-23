@@ -1,12 +1,10 @@
-#if UNITY_EDITOR
-#endif
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Jobs;
 using UnityEngine;
 
 /// <summary>
-/// A* 실행, Grid 관리, Gizmos 시각화 담당
+/// A* Pathfinding 실행 및 Job System 기반 비동기 경로 탐색 처리
 /// </summary>
 public class Pathfinding : MonoBehaviour
 {
@@ -19,13 +17,23 @@ public class Pathfinding : MonoBehaviour
     GridSystem _grid;
     Pathfinder _pathfinder;
 
-    List<int> _path = new List<int>();
+    List<int> _finalPath = new List<int>();
     List<int> _rawPathBuffer = new List<int>();
-    List<int> _smoothBuffer = new List<int>();
+    List<int> _smoothedPathBuffer = new List<int>();
 
-    public GridSystem GetGrid() => _grid;
+    NativeArray<byte> _nodeStateArray;
+    NativeArray<int> _openListArray;
+    NativeArray<int> _jobResultArray;
+
+    JobHandle _pathfindingJobHandle;
+    bool _isJobRunning;
+    int _pendingEndIndex;
+
+    List<PathRequest> _requests = new List<PathRequest>();
 
     const int MaxPathBuildSafety = 100000;
+
+    public GridSystem GetGrid() => _grid;
 
     void Awake()
     {
@@ -37,6 +45,12 @@ public class Pathfinding : MonoBehaviour
 
         _pathfinder = new Pathfinder(_grid.Walkables, _grid.Nodes, _grid.Width, _grid.Height);
         MapBuilder.CreatePrimMaze(_grid, _width, _height);
+
+        int totalNodeCount = _grid.Width * _grid.Height;
+
+        _nodeStateArray = new NativeArray<byte>(totalNodeCount, Allocator.Persistent);
+        _openListArray = new NativeArray<int>(totalNodeCount, Allocator.Persistent);
+        _jobResultArray = new NativeArray<int>(1, Allocator.Persistent);
     }
 
     void OnDestroy()
@@ -46,189 +60,206 @@ public class Pathfinding : MonoBehaviour
 
         if (_pathfinder != null)
             _pathfinder.Dispose();
+
+        if (_nodeStateArray.IsCreated)
+            _nodeStateArray.Dispose();
+
+        if (_openListArray.IsCreated)
+            _openListArray.Dispose();
+
+        if (_jobResultArray.IsCreated)
+            _jobResultArray.Dispose();
     }
 
-
-    List<int> SmoothPath(List<int> path)
+    // Job 시작 (비동기)
+    public void StartPathfindingJob(int startIndex, int endIndex)
     {
-        if (path == null || path.Count < 3)
-            return path;
+        _pendingEndIndex = endIndex;
 
-        _smoothBuffer.Clear();
+        for (int i = 0; i < _nodeStateArray.Length; i++)
+            _nodeStateArray[i] = 0;
 
-        int width = _grid.Width;
+        for (int i = 0; i < _openListArray.Length; i++)
+            _openListArray[i] = 0;
 
-        // 시작점
-        _smoothBuffer.Add(path[0]);
+        _jobResultArray[0] = 0;
 
-        for (int i = 1; i < path.Count - 1; i++)
+        AStarJob job = new AStarJob
         {
-            int prev = path[i - 1];
-            int current = path[i];
-            int next = path[i + 1];
+            width = _grid.Width,
+            height = _grid.Height,
+            startIndex = startIndex,
+            endIndex = endIndex,
+            walkables = _grid.Walkables,
+            nodes = _grid.Nodes,
+            state = _nodeStateArray,
+            openList = _openListArray,
+            result = _jobResultArray
+        };
 
-            Vector2Int dir1 = GetDirection(prev, current, width);
-            Vector2Int dir2 = GetDirection(current, next, width);
-
-            if (dir1 != dir2)
-                _smoothBuffer.Add(current);
-        }
-
-        // 끝점
-        _smoothBuffer.Add(path[path.Count - 1]);
-
-        return _smoothBuffer;
+        _pathfindingJobHandle = job.Schedule();
+        _isJobRunning = true;
     }
 
-    Vector2Int GetDirection(int from, int to, int width)
+    // Job 완료 체크
+    public bool TryCompletePathfinding(out List<int> resultPath)
     {
-        int fromX = from % width;
-        int fromY = from / width;
+        resultPath = null;
 
-        int toX = to % width;
-        int toY = to / width;
-
-        return new Vector2Int(toX - fromX, toY - fromY);
-    }
-
-    bool IsWalkableIndex(int index)
-    {
-        if (index < 0 || index >= _grid.Width * _grid.Height)
+        if (!_isJobRunning)
             return false;
 
-        return _grid.Walkables[index];
-    }
+        if (!_pathfindingJobHandle.IsCompleted)
+            return false;
 
-    bool TryBuildRawPath(int end, List<int> output)
-    {
-        output.Clear();
+        _pathfindingJobHandle.Complete();
+        _isJobRunning = false;
 
-        int current = end;
-        int safety = 0;
+        if (_jobResultArray[0] != 1)
+            return false;
 
-        while (current != -1)
-        {
-            if (++safety > MaxPathBuildSafety)
-            {
-                Debug.LogError("Path build safety break triggered (possible parent cycle)");
-                output.Clear();
-                return false;
-            }
+        if (!TryBuildRawPath(_pendingEndIndex, _rawPathBuffer))
+            return false;
 
-            output.Add(current);
-            current = _grid.Nodes[current].ParentIndex;
-        }
+        _finalPath = SmoothPath(_rawPathBuffer);
+        resultPath = _finalPath;
 
-        output.Reverse();
         return true;
     }
 
-    public List<int> RunAndGetPath(int start, int end)
+    // 병렬 Job 시작
+    public void StartPathfindingJobMulti(int startIndex, int endIndex)
     {
-        if (start < 0 || end < 0)
+        int totalNodeCount = _grid.Width * _grid.Height;
+
+        PathRequest request = new PathRequest
         {
-            Debug.LogError("Invalid start/end index");
-            return null;
-        }
+            NodeState = new NativeArray<byte>(totalNodeCount, Allocator.TempJob),
+            OpenList = new NativeArray<int>(totalNodeCount, Allocator.TempJob),
+            Result = new NativeArray<int>(1, Allocator.TempJob),
+            Nodes = new NativeArray<PathNode>(_grid.Nodes, Allocator.TempJob),
+            StartIndex = startIndex,
+            EndIndex = endIndex
 
-        if (!IsWalkableIndex(start) || !IsWalkableIndex(end))
+        };
+
+        AStarJob job = new AStarJob
         {
-            Debug.LogWarning("Start or end is blocked, skip pathfinding");
-            return null;
-        }
+            width = _grid.Width,
+            height = _grid.Height,
+            startIndex = startIndex,
+            endIndex = endIndex,
+            walkables = _grid.Walkables,
+            nodes = request.Nodes,
+            state = request.NodeState,
+            openList = request.OpenList,
+            result = request.Result
+        };
 
-        if (start == end)
+        request.Handle = job.Schedule();
+
+        _requests.Add(request);
+    }
+
+    // 병렬 Job 완료 처리
+    public void UpdatePathRequests()
+    {
+        for (int i = _requests.Count - 1; i >= 0; i--)
         {
-            _path.Clear();
-            _path.Add(start);
-            return _path;
-        }
+            PathRequest request = _requests[i];
 
-        _pathfinder.BeginSearch(start, end);
+            if (!request.Handle.IsCompleted)
+                continue;
 
-        int maxIteration = _grid.Width * _grid.Height;
-        int iteration = 0;
+            request.Handle.Complete();
 
-        while (true)
-        {
-            iteration++;
-
-            if (iteration > maxIteration)
+            if (request.Result[0] == 1)
             {
-                Debug.LogError("Pathfinding 무한 루프 방지 (MaxIteration 초과)");
-                return null;
+                if (TryBuildRawPath(request.EndIndex, _rawPathBuffer))
+                {
+                    _finalPath = SmoothPath(_rawPathBuffer);
+                    Debug.Log($"[Multi] Path 완료: {_finalPath.Count}");
+                }
             }
 
-            bool reached = _pathfinder.Step(out _);
+            request.NodeState.Dispose();
+            request.OpenList.Dispose();
+            request.Result.Dispose();
+            request.Nodes.Dispose();
 
-            if (reached)
-            {
-                if (!TryBuildRawPath(end, _rawPathBuffer))
-                    return null;
-
-                _path = SmoothPath(_rawPathBuffer);
-                return _path;
-            }
-
-            if (_pathfinder.IsEmpty())
-                return null;
+            _requests.RemoveAt(i);
         }
     }
 
-    public List<int> RunRawPath(int start, int end)
+    public List<int> RunRawPath(int startIndex, int endIndex)
     {
-        if (start < 0 || end < 0)
+        if (startIndex < 0 || endIndex < 0)
             return null;
 
-        if (!IsWalkableIndex(start) || !IsWalkableIndex(end))
+        if (!_grid.Walkables[startIndex] || !_grid.Walkables[endIndex])
             return null;
 
-        if (start == end)
+        _pathfinder.BeginSearch(startIndex, endIndex);
+
+        int maxIterationCount = _grid.Width * _grid.Height;
+
+        for (int iteration = 0; iteration < maxIterationCount; iteration++)
         {
-            _rawPathBuffer.Clear();
-            _rawPathBuffer.Add(start);
-            return _rawPathBuffer;
-        }
+            bool reachedGoal = _pathfinder.Step(out _);
 
-        _pathfinder.BeginSearch(start, end);
-
-        int maxIteration = _grid.Width * _grid.Height;
-        int iteration = 0;
-
-        while (true)
-        {
-            iteration++;
-            if (iteration > maxIteration)
+            if (reachedGoal)
             {
-                Debug.LogWarning("RunRawPath iteration exceeded max iteration");
-                return null;
-            }
-
-            bool reached = _pathfinder.Step(out _);
-
-            if (reached)
-            {
-                if (!TryBuildRawPath(end, _rawPathBuffer))
+                if (!TryBuildRawPath(endIndex, _rawPathBuffer))
                     return null;
+
                 return _rawPathBuffer;
             }
 
             if (_pathfinder.IsEmpty())
                 return null;
         }
+
+        return null;
     }
 
-    public int GetVisitedNodeCount()
+    public List<int> RunAndGetPath(int startIndex, int endIndex)
     {
-        return _pathfinder.VisitedNodeCount;
+        if (startIndex < 0 || endIndex < 0)
+            return null;
+
+        if (!_grid.Walkables[startIndex] || !_grid.Walkables[endIndex])
+            return null;
+
+        _pathfinder.BeginSearch(startIndex, endIndex);
+
+        int maxIteration = _grid.Width * _grid.Height;
+
+        for (int i = 0; i < maxIteration; i++)
+        {
+            bool reached = _pathfinder.Step(out _);
+
+            if (reached)
+            {
+                if (!TryBuildRawPath(endIndex, _rawPathBuffer))
+                    return null;
+
+                _finalPath = SmoothPath(_rawPathBuffer);
+                return _finalPath;
+            }
+
+            if (_pathfinder.IsEmpty())
+                return null;
+        }
+
+        return null;
     }
 
     public List<int> RunJobAndBuildPath(int startIndex, int endIndex)
     {
-        int size = _grid.Width * _grid.Height;
+        int totalNodeCount = _grid.Width * _grid.Height;
 
-        NativeArray<byte> state = new NativeArray<byte>(size, Allocator.TempJob);
-        NativeArray<int> openList = new NativeArray<int>(size, Allocator.TempJob);
+        NativeArray<byte> nodeState = new NativeArray<byte>(totalNodeCount, Allocator.TempJob);
+        NativeArray<int> openList = new NativeArray<int>(totalNodeCount, Allocator.TempJob);
         NativeArray<int> result = new NativeArray<int>(1, Allocator.TempJob);
 
         AStarJob job = new AStarJob
@@ -239,31 +270,108 @@ public class Pathfinding : MonoBehaviour
             endIndex = endIndex,
             walkables = _grid.Walkables,
             nodes = _grid.Nodes,
-            state = state,
+            state = nodeState,
             openList = openList,
             result = result
         };
 
-        job.Run();
+        JobHandle handle = job.Schedule();
+        handle.Complete();
 
-        List<int> finalPath = null;
-
-        if (result[0] == 1)
+        if (result[0] != 1)
         {
-            if (TryBuildRawPath(endIndex, _rawPathBuffer))
-            {
-                _path = SmoothPath(_rawPathBuffer);
-                finalPath = _path;
-            }
+            nodeState.Dispose();
+            openList.Dispose();
+            result.Dispose();
+            return null;
         }
-        else
-            _path = null;
 
-        state.Dispose();
+        if (!TryBuildRawPath(endIndex, _rawPathBuffer))
+        {
+            nodeState.Dispose();
+            openList.Dispose();
+            result.Dispose();
+            return null;
+        }
+
+        List<int> finalPath = SmoothPath(_rawPathBuffer);
+
+        nodeState.Dispose();
         openList.Dispose();
         result.Dispose();
 
         return finalPath;
+    }
+
+    public int GetVisitedNodeCount()
+    {
+        return _pathfinder.VisitedNodeCount;
+    }
+
+    bool TryBuildRawPath(int endIndex, List<int> outputPath)
+    {
+        outputPath.Clear();
+
+        int currentIndex = endIndex;
+        int safetyCounter = 0;
+
+        while (currentIndex != -1)
+        {
+            safetyCounter++;
+
+            if (safetyCounter > MaxPathBuildSafety)
+            {
+                Debug.LogError("Parent cycle 감지");
+                outputPath.Clear();
+                return false;
+            }
+
+            outputPath.Add(currentIndex);
+            currentIndex = _grid.Nodes[currentIndex].ParentIndex;
+        }
+
+        outputPath.Reverse();
+        return true;
+    }
+
+    List<int> SmoothPath(List<int> originalPath)
+    {
+        if (originalPath == null || originalPath.Count < 3)
+            return originalPath;
+
+        _smoothedPathBuffer.Clear();
+
+        int gridWidth = _grid.Width;
+
+        _smoothedPathBuffer.Add(originalPath[0]);
+
+        for (int index = 1; index < originalPath.Count - 1; index++)
+        {
+            int previousIndex = originalPath[index - 1];
+            int currentIndex = originalPath[index];
+            int nextIndex = originalPath[index + 1];
+
+            Vector2Int previousDirection = GetDirection(previousIndex, currentIndex, gridWidth);
+            Vector2Int nextDirection = GetDirection(currentIndex, nextIndex, gridWidth);
+
+            if (previousDirection != nextDirection)
+                _smoothedPathBuffer.Add(currentIndex);
+        }
+
+        _smoothedPathBuffer.Add(originalPath[originalPath.Count - 1]);
+
+        return _smoothedPathBuffer;
+    }
+
+    Vector2Int GetDirection(int fromIndex, int toIndex, int gridWidth)
+    {
+        int fromX = fromIndex % gridWidth;
+        int fromY = fromIndex / gridWidth;
+
+        int toX = toIndex % gridWidth;
+        int toY = toIndex / gridWidth;
+
+        return new Vector2Int(toX - fromX, toY - fromY);
     }
 
     #region Gizmos
@@ -272,50 +380,34 @@ public class Pathfinding : MonoBehaviour
         if (_grid == null)
             return;
 
-        // Grid
         for (int x = 0; x < _width; x++)
         {
             for (int y = 0; y < _height; y++)
             {
-                int index = y * _width + x;
+                int nodeIndex = y * _width + x;
+                bool isWalkable = _grid.Walkables[nodeIndex];
 
-                bool walkable = _grid.Walkables[index];
+                Vector3 worldPosition = new Vector3(x, 0, y);
 
-                Vector3 pos = new Vector3(x, 0, y);
-
-                Gizmos.color = walkable ? Color.white : Color.red;
-                Gizmos.DrawWireCube(pos, Vector3.one);
+                Gizmos.color = isWalkable ? Color.white : Color.red;
+                Gizmos.DrawWireCube(worldPosition, Vector3.one);
             }
         }
 
-        if (_path == null)
+        if (_finalPath == null)
             return;
 
-        // Path
         Gizmos.color = Color.green;
 
-        // Path 라인
-        for (int i = 0; i < _path.Count - 1; i++)
+        for (int pathIndex = 0; pathIndex < _finalPath.Count - 1; pathIndex++)
         {
-            int startIndex = _path[i];
-            int endIndex = _path[i + 1];
+            int startIndex = _finalPath[pathIndex];
+            int endIndex = _finalPath[pathIndex + 1];
 
-            int startX = startIndex % _width;
-            int startY = startIndex / _width;
+            Vector3 startPosition = new Vector3(startIndex % _width, 0, startIndex / _width);
+            Vector3 endPosition = new Vector3(endIndex % _width, 0, endIndex / _width);
 
-            int endX = endIndex % _width;
-            int endY = endIndex / _width;
-
-            Gizmos.DrawLine(new Vector3(startX, 0, startY), new Vector3(endX, 0, endY));
-        }
-
-        // Node 점
-        foreach (int nodeIndex in _path)
-        {
-            int nodeX = nodeIndex % _width;
-            int nodeY = nodeIndex / _width;
-
-            Gizmos.DrawSphere(new Vector3(nodeX, 0, nodeY), 0.2f);
+            Gizmos.DrawLine(startPosition, endPosition);
         }
     }
     #endregion

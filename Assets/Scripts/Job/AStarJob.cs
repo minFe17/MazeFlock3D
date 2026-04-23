@@ -12,7 +12,7 @@ public struct AStarJob : IJob
     public int startIndex;
     public int endIndex;
 
-    public NativeArray<bool> walkables;
+    [ReadOnly] public NativeArray<bool> walkables;
     public NativeArray<PathNode> nodes;
 
     public NativeArray<byte> state;
