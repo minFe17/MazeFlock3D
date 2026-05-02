@@ -70,15 +70,15 @@ public struct AStarJob : IJob
         state[startIndex] = STATE_OPEN;
     }
 
-    int Heuristic(int a, int b)
+    int Heuristic(int first, int second)
     {
-        int ax = a % width;
-        int ay = a / width;
+        int firstX = first % width;
+        int firstY = first / width;
 
-        int bx = b % width;
-        int by = b / width;
+        int secondX = second % width;
+        int secondY = second / width;
 
-        return Mathf.Abs(ax - bx) + Mathf.Abs(ay - by);
+        return Mathf.Abs(firstX - secondX) + Mathf.Abs(firstY - secondY);
     }
 
     void ExpandNode(int currentIndex, ref int openCount)

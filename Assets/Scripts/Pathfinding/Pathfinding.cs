@@ -34,6 +34,7 @@ public class Pathfinding : MonoBehaviour
     const int MaxPathBuildSafety = 100000;
 
     public GridSystem GetGrid() => _grid;
+    public bool IsAllJobCompleted() => _requests.Count == 0;
 
     void Awake()
     {
@@ -252,6 +253,59 @@ public class Pathfinding : MonoBehaviour
         }
 
         return null;
+    }
+
+    public void RunMultiJobAndCompleteAll(List<PathTestCase> testCases)
+    {
+        int totalNodeCount = _grid.Width * _grid.Height;
+
+        NativeArray<JobHandle> handles = new NativeArray<JobHandle>(testCases.Count, Allocator.Temp);
+        List<NativeArray<byte>> states = new List<NativeArray<byte>>();
+        List<NativeArray<int>> opens = new List<NativeArray<int>>();
+        List<NativeArray<int>> results = new List<NativeArray<int>>();
+        List<NativeArray<PathNode>> nodesList = new List<NativeArray<PathNode>>();
+
+        for (int i = 0; i < testCases.Count; i++)
+        {
+            PathTestCase test = testCases[i];
+
+            NativeArray<byte> state = new NativeArray<byte>(totalNodeCount, Allocator.TempJob);
+            NativeArray<int> open = new NativeArray<int>(totalNodeCount, Allocator.TempJob);
+            NativeArray<int> result = new NativeArray<int>(1, Allocator.TempJob);
+            NativeArray<PathNode> nodes = new NativeArray<PathNode>(_grid.Nodes, Allocator.TempJob);
+
+            AStarJob job = new AStarJob
+            {
+                width = _grid.Width,
+                height = _grid.Height,
+                startIndex = test.Start,
+                endIndex = test.End,
+                walkables = _grid.Walkables,
+                nodes = nodes,
+                state = state,
+                openList = open,
+                result = result
+            };
+
+            handles[i] = job.Schedule();
+
+            states.Add(state);
+            opens.Add(open);
+            results.Add(result);
+            nodesList.Add(nodes);
+        }
+
+        JobHandle.CompleteAll(handles);
+
+        for (int i = 0; i < testCases.Count; i++)
+        {
+            states[i].Dispose();
+            opens[i].Dispose();
+            results[i].Dispose();
+            nodesList[i].Dispose();
+        }
+
+        handles.Dispose();
     }
 
     public List<int> RunJobAndBuildPath(int startIndex, int endIndex)

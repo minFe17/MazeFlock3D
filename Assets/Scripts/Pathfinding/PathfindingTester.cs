@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
@@ -10,9 +11,12 @@ public class PathfindingTester : MonoBehaviour
 {
     [SerializeField] Pathfinding _runner;
     [SerializeField] ETestMode _testMode;
+    [SerializeField] EPerformanceMode _performanceMode;
     [SerializeField] int _testSeed;
 
     Vector2Int[] _directions = { Vector2Int.left, Vector2Int.right, Vector2Int.up, Vector2Int.down };
+
+    List<PathTestCase> _testCases = new List<PathTestCase>();
 
     void Start()
     {
@@ -21,6 +25,7 @@ public class PathfindingTester : MonoBehaviour
         int successCount = 0;
         int tryCount = 0;
 
+        // 여러 테스트 케이스 생성
         while (successCount < 50 && tryCount < 200)
         {
             tryCount++;
@@ -28,16 +33,85 @@ public class PathfindingTester : MonoBehaviour
             if (!TryFindValidPath(grid, out int start, out int end, out List<int> rawPath))
                 continue;
 
-            _runner.StartPathfindingJobMulti(start, end);
+            _testCases.Add(new PathTestCase { Start = start, End = end });
             successCount++;
         }
 
-        Debug.Log($"멀티 Job 요청 완료: {successCount}/50");
+        Debug.Log($"테스트 케이스 생성: {successCount}");
+
+        if (_testCases.Count == 0)
+        {
+            Debug.LogError("유효한 테스트 케이스 없음");
+            return;
+        }
+
+        RunSelectedMode();
     }
 
-    void Update()
+    void RunSelectedMode()
     {
-        _runner.UpdatePathRequests();
+        switch (_performanceMode)
+        {
+            case EPerformanceMode.Single:
+                RunSingleTest();
+                break;
+
+            case EPerformanceMode.Job:
+                RunJobTest();
+                break;
+
+            case EPerformanceMode.MultiJob:
+                RunMultiJobTest();
+                break;
+        }
+    }
+
+    void RunSingleTest()
+    {
+        int testCount = _testCases.Count;
+        Stopwatch stopwatch = Stopwatch.StartNew();
+
+        for (int i = 0; i < testCount; i++)
+        {
+            PathTestCase testCase = _testCases[i];
+
+            _runner.RunAndGetPath(testCase.Start, testCase.End);
+        }
+
+        stopwatch.Stop();
+
+        double time = stopwatch.Elapsed.TotalMilliseconds;
+        Debug.Log($"[Single] Total: {time:F3} ms | PerPath: {time / testCount:F3} ms");
+    }
+
+    void RunJobTest()
+    {
+        int testCount = _testCases.Count;
+        Stopwatch stopwatch = Stopwatch.StartNew();
+
+        for (int i = 0; i < testCount; i++)
+        {
+            PathTestCase testCase = _testCases[i];
+            _runner.RunJobAndBuildPath(testCase.Start, testCase.End);
+
+        }
+
+        stopwatch.Stop();
+
+        double time = stopwatch.Elapsed.TotalMilliseconds;
+        Debug.Log($"[Job] Total: {time:F3} ms | PerPath: {time / testCount:F3} ms");
+    }
+
+    void RunMultiJobTest()
+    {
+        int testCount = _testCases.Count;
+        Stopwatch stopwatch = Stopwatch.StartNew();
+
+        _runner.RunMultiJobAndCompleteAll(_testCases);
+        stopwatch.Stop();
+
+        double time = stopwatch.Elapsed.TotalMilliseconds;
+        Debug.Log($"[Multi] Total: {time:F3} ms | PerPath: {time / testCount:F3} ms");
     }
 
     bool TryFindValidPath(GridSystem grid, out int start, out int end, out List<int> rawPath)
@@ -115,23 +189,6 @@ public class PathfindingTester : MonoBehaviour
         }
     }
 
-    int GetNearbyWalkable(GridSystem grid, int baseIndex, int totalNode)
-    {
-        for (int i = 0; i < 10; i++)
-        {
-            int offset = Random.Range(-10, 10);
-            int index = baseIndex + offset;
-
-            if (index < 0 || index >= totalNode)
-                continue;
-
-            if (grid.Walkables[index])
-                return index;
-        }
-
-        return -1;
-    }
-
     int GetNearestWalkable(GridSystem grid, int startIndex, int width, int height)
     {
         int startX = startIndex % width;
@@ -156,17 +213,17 @@ public class PathfindingTester : MonoBehaviour
 
             foreach (Vector2Int direction in _directions)
             {
-                int nx = currentPos.x + direction.x;
-                int ny = currentPos.y + direction.y;
+                int nextX = currentPos.x + direction.x;
+                int nextY = currentPos.y + direction.y;
 
-                if (nx < 0 || nx >= width || ny < 0 || ny >= height)
+                if (nextX < 0 || nextX >= width || nextY < 0 || nextY >= height)
                     continue;
 
-                if (visited[nx, ny])
+                if (visited[nextX, nextY])
                     continue;
 
-                visited[nx, ny] = true;
-                queue.Enqueue(new Vector2Int(nx, ny));
+                visited[nextX, nextY] = true;
+                queue.Enqueue(new Vector2Int(nextX, nextY));
             }
         }
 
