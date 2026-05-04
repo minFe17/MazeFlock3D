@@ -12,14 +12,14 @@ public static class MapBuilder
     public static void CreatePrimMaze(GridSystem grid, int width, int height)
     {
         for (int i = 0; i < width * height; i++)
-            grid.SetWalkable(i, false);
+            grid.SetWalkable(i, 0);
 
         HashSet<int> visited = new HashSet<int>();
         List<int> frontier = new List<int>();
 
         int start = 1 + width;
         visited.Add(start);
-        grid.SetWalkable(start, true);
+        grid.SetWalkable(start, 1);
 
         AddPrimFrontier(start, grid, width, height, visited, frontier);
 
@@ -39,8 +39,8 @@ public static class MapBuilder
             int neighbor = neighbors[Random.Range(0, neighbors.Count)];
             int between = (cell + neighbor) / 2;
 
-            grid.SetWalkable(cell, true);
-            grid.SetWalkable(between, true);
+            grid.SetWalkable(cell, 1);
+            grid.SetWalkable(between, 1);
             visited.Add(cell);
 
             AddPrimFrontier(cell, grid, width, height, visited, frontier);

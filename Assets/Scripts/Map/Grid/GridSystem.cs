@@ -5,13 +5,13 @@ using Unity.Collections;
 /// </summary>
 public class GridSystem
 {
-    NativeArray<bool> _walkables;
+    NativeArray<byte> _walkables;
     NativeArray<PathNode> _nodes;
 
     int _width;
     int _height;
 
-    public NativeArray<bool> Walkables => _walkables;
+    public NativeArray<byte> Walkables => _walkables;
     public NativeArray<PathNode> Nodes => _nodes;
     public int Width => _width;
     public int Height => _height;
@@ -25,11 +25,11 @@ public class GridSystem
 
         int size = width * height;
 
-        _walkables = new NativeArray<bool>(size, Allocator.Persistent);
+        _walkables = new NativeArray<byte>(size, Allocator.Persistent);
         _nodes = new NativeArray<PathNode>(size, Allocator.Persistent);
 
         for (int i = 0; i < size; i++)
-            _walkables[i] = true;
+            _walkables[i] = 1;
 
         ResetNodes();
     }
@@ -58,7 +58,7 @@ public class GridSystem
         return y * _width + x;
     }
 
-    public void SetWalkable(int index, bool walkable)
+    public void SetWalkable(int index, byte walkable)
     {
         _walkables[index] = walkable;
     }

@@ -1,7 +1,7 @@
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
-using UnityEngine;
+using Unity.Mathematics;
 
 [BurstCompile]
 public struct AStarJob : IJob
@@ -12,7 +12,7 @@ public struct AStarJob : IJob
     public int startIndex;
     public int endIndex;
 
-    [ReadOnly] public NativeArray<bool> walkables;
+    [ReadOnly] public NativeArray<byte> walkables;
     public NativeArray<PathNode> nodes;
 
     public NativeArray<byte> state;
@@ -55,6 +55,7 @@ public struct AStarJob : IJob
             PathNode node = nodes[i];
             node.CostFromStart = int.MaxValue;
             node.CostToGoal = 0;
+            node.TotalCost = int.MaxValue;
             node.ParentIndex = -1;
             nodes[i] = node;
         }
@@ -62,6 +63,7 @@ public struct AStarJob : IJob
         PathNode start = nodes[startIndex];
         start.CostFromStart = 0;
         start.CostToGoal = Heuristic(startIndex, endIndex);
+        start.TotalCost = start.CostFromStart + start.CostToGoal;
         start.ParentIndex = -1;
 
         nodes[startIndex] = start;
@@ -78,7 +80,7 @@ public struct AStarJob : IJob
         int secondX = second % width;
         int secondY = second / width;
 
-        return Mathf.Abs(firstX - secondX) + Mathf.Abs(firstY - secondY);
+        return math.abs(firstX - secondX) + math.abs(firstY - secondY);
     }
 
     void ExpandNode(int currentIndex, ref int openCount)
@@ -91,21 +93,19 @@ public struct AStarJob : IJob
         int newCost = currentNode.CostFromStart + 1;
 
         int up = currentIndex - width;
-        if (up >= 0 && state[up] != STATE_CLOSED && walkables[up])
+        if (up >= 0 && state[up] != STATE_CLOSED && walkables[up] == 1)
             ProcessNeighbor(currentIndex, up, newCost, ref openCount);
 
         int down = currentIndex + width;
-        if (down < size && state[down] != STATE_CLOSED && walkables[down])
+        if (down < size && state[down] != STATE_CLOSED && walkables[down] == 1)
             ProcessNeighbor(currentIndex, down, newCost, ref openCount);
 
         int left = currentIndex - 1;
-        if (left >= 0 && state[left] != STATE_CLOSED &&
-            (left % width) == currentX - 1 && walkables[left])
+        if (left >= 0 && state[left] != STATE_CLOSED && (left % width) == currentX - 1 && walkables[left] == 1)
             ProcessNeighbor(currentIndex, left, newCost, ref openCount);
 
         int right = currentIndex + 1;
-        if (right < size && state[right] != STATE_CLOSED &&
-            (right % width) == currentX + 1 && walkables[right])
+        if (right < size && state[right] != STATE_CLOSED && (right % width) == currentX + 1 && walkables[right] == 1)
             ProcessNeighbor(currentIndex, right, newCost, ref openCount);
     }
 
@@ -120,6 +120,7 @@ public struct AStarJob : IJob
         {
             neighbor.CostFromStart = newCost;
             neighbor.CostToGoal = Heuristic(neighborIndex, endIndex);
+            neighbor.TotalCost = neighbor.CostFromStart + neighbor.CostToGoal;
             neighbor.ParentIndex = currentIndex;
 
             nodes[neighborIndex] = neighbor;

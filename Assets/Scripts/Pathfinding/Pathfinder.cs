@@ -7,7 +7,7 @@ using UnityEngine;
 /// </summary>
 public class Pathfinder
 {
-    readonly NativeArray<bool> _walkables;
+    readonly NativeArray<byte> _walkables;
     NativeArray<PathNode> _nodes;
 
     readonly int _width;
@@ -24,7 +24,7 @@ public class Pathfinder
 
     public int VisitedNodeCount { get; private set; }
 
-    public Pathfinder(NativeArray<bool> walkables, NativeArray<PathNode> nodes, int width, int height)
+    public Pathfinder(NativeArray<byte> walkables, NativeArray<PathNode> nodes, int width, int height)
     {
         _walkables = walkables;
         _nodes = nodes;
@@ -68,6 +68,7 @@ public class Pathfinder
         PathNode startNode = _nodes[startIndex];
         startNode.CostFromStart = 0;
         startNode.CostToGoal = Heuristic(startIndex, endIndex);
+        startNode.TotalCost = startNode.CostFromStart + startNode.CostToGoal;
 
         _nodes[startIndex] = startNode;
 
@@ -117,19 +118,19 @@ public class Pathfinder
         int newCost = currentNode.CostFromStart + 1;
 
         int up = currentIndex - _width;
-        if (up >= 0 && _state[up] != STATE_CLOSED && _walkables[up])
+        if (up >= 0 && _state[up] != STATE_CLOSED && _walkables[up] == 1)
             ProcessNeighbor(currentIndex, up, newCost);
 
         int down = currentIndex + _width;
-        if (down < size && _state[down] != STATE_CLOSED && _walkables[down])
+        if (down < size && _state[down] != STATE_CLOSED && _walkables[down] == 1)
             ProcessNeighbor(currentIndex, down, newCost);
 
         int left = currentIndex - 1;
-        if (left >= 0 && _state[left] != STATE_CLOSED && (left % _width) == currentX - 1 && _walkables[left])
+        if (left >= 0 && _state[left] != STATE_CLOSED && (left % _width) == currentX - 1 && _walkables[left] == 1)
             ProcessNeighbor(currentIndex, left, newCost);
 
         int right = currentIndex + 1;
-        if (right < size && _state[right] != STATE_CLOSED && (right % _width) == currentX + 1 && _walkables[right])
+        if (right < size && _state[right] != STATE_CLOSED && (right % _width) == currentX + 1 && _walkables[right] == 1)
             ProcessNeighbor(currentIndex, right, newCost);
     }
 
@@ -144,6 +145,7 @@ public class Pathfinder
         {
             neighborNode.CostFromStart = newCost;
             neighborNode.CostToGoal = Heuristic(neighborIndex, _endIndex);
+            neighborNode.TotalCost = neighborNode.CostFromStart + neighborNode.CostToGoal;
             neighborNode.ParentIndex = currentIndex;
 
             _nodes[neighborIndex] = neighborNode;

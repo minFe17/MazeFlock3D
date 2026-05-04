@@ -26,7 +26,7 @@ public class PathfindingTester : MonoBehaviour
         int tryCount = 0;
 
         // 여러 테스트 케이스 생성
-        while (successCount < 50 && tryCount < 200)
+        while (successCount < 1000 && tryCount < 5000)
         {
             tryCount++;
 
@@ -194,7 +194,7 @@ public class PathfindingTester : MonoBehaviour
         int startX = startIndex % width;
         int startY = startIndex / width;
 
-        if (grid.Walkables[startIndex])
+        if (grid.Walkables[startIndex] == 1)
             return startIndex;
 
         Queue<Vector2Int> queue = new Queue<Vector2Int>();
@@ -208,7 +208,7 @@ public class PathfindingTester : MonoBehaviour
             Vector2Int currentPos = queue.Dequeue();
             int currentIndex = currentPos.y * width + currentPos.x;
 
-            if (grid.Walkables[currentIndex])
+            if (grid.Walkables[currentIndex] == 1)
                 return currentIndex;
 
             foreach (Vector2Int direction in _directions)

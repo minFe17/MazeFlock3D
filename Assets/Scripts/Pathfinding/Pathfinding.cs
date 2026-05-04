@@ -197,7 +197,7 @@ public class Pathfinding : MonoBehaviour
         if (startIndex < 0 || endIndex < 0)
             return null;
 
-        if (!_grid.Walkables[startIndex] || !_grid.Walkables[endIndex])
+        if (_grid.Walkables[startIndex] != 1 || _grid.Walkables[endIndex] != 1)
             return null;
 
         _pathfinder.BeginSearch(startIndex, endIndex);
@@ -228,7 +228,7 @@ public class Pathfinding : MonoBehaviour
         if (startIndex < 0 || endIndex < 0)
             return null;
 
-        if (!_grid.Walkables[startIndex] || !_grid.Walkables[endIndex])
+        if (_grid.Walkables[startIndex] != 1 || _grid.Walkables[endIndex] != 1)
             return null;
 
         _pathfinder.BeginSearch(startIndex, endIndex);
@@ -439,7 +439,7 @@ public class Pathfinding : MonoBehaviour
             for (int y = 0; y < _height; y++)
             {
                 int nodeIndex = y * _width + x;
-                bool isWalkable = _grid.Walkables[nodeIndex];
+                bool isWalkable = _grid.Walkables[nodeIndex] == 1;
 
                 Vector3 worldPosition = new Vector3(x, 0, y);
 

@@ -6,8 +6,7 @@ public struct PathNode
     public int CostFromStart;
     public int CostToGoal;
     public int ParentIndex;
-
-    public int TotalCost => CostFromStart + CostToGoal;
+    public int TotalCost;
 
     public void Init()
     {
