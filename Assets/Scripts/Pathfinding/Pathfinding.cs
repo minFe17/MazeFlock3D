@@ -119,10 +119,10 @@ public class Pathfinding : MonoBehaviour
         if (_jobResultArray[0] != 1)
             return false;
 
-        if (!TryBuildRawPath(_pendingEndIndex, _rawPathBuffer))
+        if (!TryBuildRawPath(_grid.Nodes, _pendingEndIndex, _rawPathBuffer))
             return false;
 
-        _finalPath = SmoothPath(_rawPathBuffer);
+        SmoothPath(_rawPathBuffer, _finalPath);
         resultPath = _finalPath;
 
         return true;
@@ -176,9 +176,9 @@ public class Pathfinding : MonoBehaviour
 
             if (request.Result[0] == 1)
             {
-                if (TryBuildRawPath(request.EndIndex, _rawPathBuffer))
+                if (TryBuildRawPath(request.Nodes, request.EndIndex, _rawPathBuffer))
                 {
-                    _finalPath = SmoothPath(_rawPathBuffer);
+                    SmoothPath(_rawPathBuffer, _finalPath);
                     Debug.Log($"[Multi] Path ¿Ï·á: {_finalPath.Count}");
                 }
             }
@@ -210,7 +210,7 @@ public class Pathfinding : MonoBehaviour
 
             if (reachedGoal)
             {
-                if (!TryBuildRawPath(endIndex, _rawPathBuffer))
+                if (!TryBuildRawPath(_grid.Nodes, endIndex, _rawPathBuffer))
                     return null;
 
                 return _rawPathBuffer;
@@ -241,10 +241,10 @@ public class Pathfinding : MonoBehaviour
 
             if (reached)
             {
-                if (!TryBuildRawPath(endIndex, _rawPathBuffer))
+                if (!TryBuildRawPath(_grid.Nodes, endIndex, _rawPathBuffer))
                     return null;
 
-                _finalPath = SmoothPath(_rawPathBuffer);
+                SmoothPath(_rawPathBuffer, _finalPath);
                 return _finalPath;
             }
 
@@ -255,19 +255,19 @@ public class Pathfinding : MonoBehaviour
         return null;
     }
 
-    public void RunMultiJobAndCompleteAll(List<PathTestCase> testCases)
+    public void RunMultiJobAndCompleteAll(List<AgentPathData> pathData)
     {
         int totalNodeCount = _grid.Width * _grid.Height;
 
-        NativeArray<JobHandle> handles = new NativeArray<JobHandle>(testCases.Count, Allocator.Temp);
+        NativeArray<JobHandle> handles = new NativeArray<JobHandle>(pathData.Count, Allocator.Temp);
         List<NativeArray<byte>> states = new List<NativeArray<byte>>();
         List<NativeArray<int>> opens = new List<NativeArray<int>>();
         List<NativeArray<int>> results = new List<NativeArray<int>>();
         List<NativeArray<PathNode>> nodesList = new List<NativeArray<PathNode>>();
 
-        for (int i = 0; i < testCases.Count; i++)
+        for (int i = 0; i < pathData.Count; i++)
         {
-            PathTestCase test = testCases[i];
+            AgentPathData test = pathData[i];
 
             NativeArray<byte> state = new NativeArray<byte>(totalNodeCount, Allocator.TempJob);
             NativeArray<int> open = new NativeArray<int>(totalNodeCount, Allocator.TempJob);
@@ -297,7 +297,18 @@ public class Pathfinding : MonoBehaviour
 
         JobHandle.CompleteAll(handles);
 
-        for (int i = 0; i < testCases.Count; i++)
+        for (int i = 0; i < pathData.Count; i++)
+        {
+            if (results[i][0] != 1)
+                continue;
+
+            List<int> rawPath = new List<int>();
+
+            if (TryBuildRawPath(nodesList[i], pathData[i].End, rawPath))
+                SmoothPath(rawPath, pathData[i].Path);
+        }
+
+        for (int i = 0; i < pathData.Count; i++)
         {
             states[i].Dispose();
             opens[i].Dispose();
@@ -312,9 +323,11 @@ public class Pathfinding : MonoBehaviour
     {
         int totalNodeCount = _grid.Width * _grid.Height;
 
+        NativeArray<PathNode> nodes = new NativeArray<PathNode>(_grid.Nodes, Allocator.TempJob);
         NativeArray<byte> nodeState = new NativeArray<byte>(totalNodeCount, Allocator.TempJob);
         NativeArray<int> openList = new NativeArray<int>(totalNodeCount, Allocator.TempJob);
         NativeArray<int> result = new NativeArray<int>(1, Allocator.TempJob);
+
 
         AStarJob job = new AStarJob
         {
@@ -323,7 +336,7 @@ public class Pathfinding : MonoBehaviour
             startIndex = startIndex,
             endIndex = endIndex,
             walkables = _grid.Walkables,
-            nodes = _grid.Nodes,
+            nodes = nodes,
             state = nodeState,
             openList = openList,
             result = result
@@ -334,22 +347,25 @@ public class Pathfinding : MonoBehaviour
 
         if (result[0] != 1)
         {
+            nodes.Dispose();
             nodeState.Dispose();
             openList.Dispose();
             result.Dispose();
             return null;
         }
 
-        if (!TryBuildRawPath(endIndex, _rawPathBuffer))
+        if (!TryBuildRawPath(nodes, endIndex, _rawPathBuffer))
         {
+            nodes.Dispose();
             nodeState.Dispose();
             openList.Dispose();
             result.Dispose();
             return null;
         }
 
-        List<int> finalPath = SmoothPath(_rawPathBuffer);
-
+        List<int> finalPath = new List<int>();
+        SmoothPath(_rawPathBuffer, finalPath);
+        nodes.Dispose();
         nodeState.Dispose();
         openList.Dispose();
         result.Dispose();
@@ -362,7 +378,7 @@ public class Pathfinding : MonoBehaviour
         return _pathfinder.VisitedNodeCount;
     }
 
-    bool TryBuildRawPath(int endIndex, List<int> outputPath)
+    bool TryBuildRawPath(NativeArray<PathNode> nodes, int endIndex, List<int> outputPath)
     {
         outputPath.Clear();
 
@@ -381,23 +397,26 @@ public class Pathfinding : MonoBehaviour
             }
 
             outputPath.Add(currentIndex);
-            currentIndex = _grid.Nodes[currentIndex].ParentIndex;
+            currentIndex = nodes[currentIndex].ParentIndex;
         }
 
         outputPath.Reverse();
         return true;
     }
 
-    List<int> SmoothPath(List<int> originalPath)
+    void SmoothPath(List<int> originalPath, List<int> result)
     {
-        if (originalPath == null || originalPath.Count < 3)
-            return originalPath;
+        result.Clear();
 
-        _smoothedPathBuffer.Clear();
+        if (originalPath == null || originalPath.Count < 3)
+        {
+            result.AddRange(originalPath);
+            return;
+        }
 
         int gridWidth = _grid.Width;
 
-        _smoothedPathBuffer.Add(originalPath[0]);
+        result.Add(originalPath[0]);
 
         for (int index = 1; index < originalPath.Count - 1; index++)
         {
@@ -406,15 +425,15 @@ public class Pathfinding : MonoBehaviour
             int nextIndex = originalPath[index + 1];
 
             Vector2Int previousDirection = GetDirection(previousIndex, currentIndex, gridWidth);
+
             Vector2Int nextDirection = GetDirection(currentIndex, nextIndex, gridWidth);
 
             if (previousDirection != nextDirection)
-                _smoothedPathBuffer.Add(currentIndex);
+                result.Add(currentIndex);
         }
 
-        _smoothedPathBuffer.Add(originalPath[originalPath.Count - 1]);
+        result.Add(originalPath[originalPath.Count - 1]);
 
-        return _smoothedPathBuffer;
     }
 
     Vector2Int GetDirection(int fromIndex, int toIndex, int gridWidth)

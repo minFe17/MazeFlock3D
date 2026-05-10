@@ -16,7 +16,7 @@ public class PathfindingTester : MonoBehaviour
 
     Vector2Int[] _directions = { Vector2Int.left, Vector2Int.right, Vector2Int.up, Vector2Int.down };
 
-    List<PathTestCase> _testCases = new List<PathTestCase>();
+    List<AgentPathData> _agents = new List<AgentPathData>();
 
     void Start()
     {
@@ -33,13 +33,13 @@ public class PathfindingTester : MonoBehaviour
             if (!TryFindValidPath(grid, out int start, out int end, out List<int> rawPath))
                 continue;
 
-            _testCases.Add(new PathTestCase { Start = start, End = end });
+            _agents.Add(new AgentPathData { Start = start, End = end });
             successCount++;
         }
 
         Debug.Log($"테스트 케이스 생성: {successCount}");
 
-        if (_testCases.Count == 0)
+        if (_agents.Count == 0)
         {
             Debug.LogError("유효한 테스트 케이스 없음");
             return;
@@ -68,13 +68,12 @@ public class PathfindingTester : MonoBehaviour
 
     void RunSingleTest()
     {
-        int testCount = _testCases.Count;
+        int testCount = _agents.Count;
         Stopwatch stopwatch = Stopwatch.StartNew();
 
         for (int i = 0; i < testCount; i++)
         {
-            PathTestCase testCase = _testCases[i];
-
+            AgentPathData testCase = _agents[i];
             _runner.RunAndGetPath(testCase.Start, testCase.End);
         }
 
@@ -86,14 +85,13 @@ public class PathfindingTester : MonoBehaviour
 
     void RunJobTest()
     {
-        int testCount = _testCases.Count;
+        int testCount = _agents.Count;
         Stopwatch stopwatch = Stopwatch.StartNew();
 
         for (int i = 0; i < testCount; i++)
         {
-            PathTestCase testCase = _testCases[i];
+            AgentPathData testCase = _agents[i];
             _runner.RunJobAndBuildPath(testCase.Start, testCase.End);
-
         }
 
         stopwatch.Stop();
@@ -104,10 +102,10 @@ public class PathfindingTester : MonoBehaviour
 
     void RunMultiJobTest()
     {
-        int testCount = _testCases.Count;
+        int testCount = _agents.Count;
         Stopwatch stopwatch = Stopwatch.StartNew();
 
-        _runner.RunMultiJobAndCompleteAll(_testCases);
+        _runner.RunMultiJobAndCompleteAll(_agents);
         stopwatch.Stop();
 
         double time = stopwatch.Elapsed.TotalMilliseconds;

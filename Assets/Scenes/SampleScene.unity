@@ -439,7 +439,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _runner: {fileID: 1206117961}
   _testMode: 0
-  _performanceMode: 2
+  _performanceMode: 1
   _testSeed: 999
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
