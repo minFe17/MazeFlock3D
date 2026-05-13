@@ -14,6 +14,9 @@ public class PathfindingTester : MonoBehaviour
     [SerializeField] EPerformanceMode _performanceMode;
     [SerializeField] int _testSeed;
 
+    [Header("Prefab")]
+    [SerializeField] GameObject _agentPrefab;
+
     Vector2Int[] _directions = { Vector2Int.left, Vector2Int.right, Vector2Int.up, Vector2Int.down };
 
     List<AgentPathData> _agents = new List<AgentPathData>();
@@ -110,6 +113,8 @@ public class PathfindingTester : MonoBehaviour
 
         double time = stopwatch.Elapsed.TotalMilliseconds;
         Debug.Log($"[Multi] Total: {time:F3} ms | PerPath: {time / testCount:F3} ms");
+
+        SpawnAgents();
     }
 
     bool TryFindValidPath(GridSystem grid, out int start, out int end, out List<int> rawPath)
@@ -146,37 +151,37 @@ public class PathfindingTester : MonoBehaviour
         switch (_testMode)
         {
             case ETestMode.CenterToTopEdge:
-                start = GetNearestWalkable(grid, grid.GetIndex(centerX, centerY), width, height);
-                end = GetNearestWalkable(grid, grid.GetIndex(centerX, height - 1), width, height);
+                start = GetRandomWalkableInArea(grid, centerX - 5, centerX + 5, centerY - 5, centerY + 5);
+                end = GetRandomWalkableInArea(grid, 0, width - 1, height - 6, height - 1);
                 break;
 
             case ETestMode.CenterToBottomEdge:
-                start = GetNearestWalkable(grid, grid.GetIndex(centerX, centerY), width, height);
-                end = GetNearestWalkable(grid, grid.GetIndex(centerX, 0), width, height);
+                start = GetRandomWalkableInArea(grid, centerX - 5, centerX + 5, centerY - 5, centerY + 5);
+                end = GetRandomWalkableInArea(grid, 0, width - 1, 0, 5);
                 break;
 
             case ETestMode.CenterToLeftEdge:
-                start = GetNearestWalkable(grid, grid.GetIndex(centerX, centerY), width, height);
-                end = GetNearestWalkable(grid, grid.GetIndex(0, centerY), width, height);
+                start = GetRandomWalkableInArea(grid, centerX - 5, centerX + 5, centerY - 5, centerY + 5);
+                end = GetRandomWalkableInArea(grid, 0, 5, 0, height - 1);
                 break;
 
             case ETestMode.CenterToRightEdge:
-                start = GetNearestWalkable(grid, grid.GetIndex(centerX, centerY), width, height);
-                end = GetNearestWalkable(grid, grid.GetIndex(width - 1, centerY), width, height);
+                start = GetRandomWalkableInArea(grid, centerX - 5, centerX + 5, centerY - 5, centerY + 5);
+                end = GetRandomWalkableInArea(grid, width - 6, width - 1, 0, height - 1);
                 break;
 
             case ETestMode.CornerToCorner_Diagonal1:
-                start = GetNearestWalkable(grid, grid.GetIndex(0, 0), width, height);
-                end = GetNearestWalkable(grid, grid.GetIndex(width - 1, height - 1), width, height);
+                start = GetRandomWalkableInArea(grid, 0, 5, 0, 5);
+                end = GetRandomWalkableInArea(grid, width - 6, width - 1, height - 6, height - 1);
                 break;
 
             case ETestMode.CornerToCorner_Diagonal2:
-                start = GetNearestWalkable(grid, grid.GetIndex(0, height - 1), width, height);
-                end = GetNearestWalkable(grid, grid.GetIndex(width - 1, 0), width, height);
+                start = GetRandomWalkableInArea(grid, 0, 5, height - 6, height - 1);
+                end = GetRandomWalkableInArea(grid, width - 6, width - 1, 0, 5);
                 break;
 
             case ETestMode.SameStartGoal:
-                start = GetNearestWalkable(grid, grid.GetIndex(centerX, centerY), width, height);
+                start = GetRandomWalkableInArea(grid, centerX - 5, centerX + 5, centerY - 5, centerY + 5);
                 end = start;
                 break;
 
@@ -185,6 +190,35 @@ public class PathfindingTester : MonoBehaviour
                 end = -1;
                 break;
         }
+    }
+
+    int GetRandomWalkableInArea(GridSystem grid, int minX, int maxX, int minY, int maxY)
+    {
+        int width = grid.Width;
+        int height = grid.Height;
+
+        minX = Mathf.Clamp(minX, 0, width - 1);
+        maxX = Mathf.Clamp(maxX, 0, width - 1);
+
+        minY = Mathf.Clamp(minY, 0, height - 1);
+        maxY = Mathf.Clamp(maxY, 0, height - 1);
+
+        const int MAX_TRY = 30;
+
+        for (int i = 0; i < MAX_TRY; i++)
+        {
+            int randomX = Random.Range(minX, maxX + 1);
+            int randomY = Random.Range(minY, maxY + 1);
+
+            int index = grid.GetIndex(randomX, randomY);
+
+            int walkableIndex = GetNearestWalkable(grid, index, width, height);
+
+            if (walkableIndex != -1)
+                return walkableIndex;
+        }
+
+        return -1;
     }
 
     int GetNearestWalkable(GridSystem grid, int startIndex, int width, int height)
@@ -226,5 +260,33 @@ public class PathfindingTester : MonoBehaviour
         }
 
         return -1;
+    }
+
+    void SpawnAgents()
+    {
+        GridSystem grid = _runner.GetGrid();
+
+        for (int i = 0; i < _agents.Count; i++)
+        {
+            AgentPathData agent = _agents[i];
+
+            if (agent.Path == null || agent.Path.Count == 0)
+                continue;
+
+            GameObject agentObject = Instantiate(_agentPrefab);
+            Vector3 startPosition = IndexToWorld(agent.Start, grid.Width);
+            agentObject.transform.position = startPosition;
+
+            AgentMover mover = agentObject.GetComponent<AgentMover>();
+            mover.SetPath(agent.Path, grid.Width);
+        }
+    }
+
+    Vector3 IndexToWorld(int index, int gridWidth)
+    {
+        int x = index % gridWidth;
+        int y = index / gridWidth;
+
+        return new Vector3(x, 0, y);
     }
 }
